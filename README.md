@@ -61,10 +61,25 @@ Edit [ibmcloudvercel.yml](ibmcloudvercel.yml) with your:
 - IBM Cloud region
 - Code Engine project ID
 - Cloud Object Storage bucket name
+- (Recommended) IBM Trusted Profile ID for OIDC authentication
 
-### 3. Set Environment Variables
+### 3. Authentication Setup
 
-Set the following in your Vercel project settings or local environment:
+**Option A: OIDC Authentication (Recommended - Most Secure)**
+
+Use Vercel's OIDC tokens with IBM Trusted Profiles:
+
+```yaml
+# In ibmcloudvercel.yml
+ibm_cloud:
+  trusted_profile_id: "Profile-xxxx-xxxx-xxxx"
+```
+
+See [OIDC_SETUP.md](OIDC_SETUP.md) for detailed setup instructions.
+
+**Option B: API Key Authentication (Fallback)**
+
+Set environment variables in Vercel project settings:
 
 ```bash
 export IBM_CLOUD_API_KEY="your-ibm-cloud-api-key"
