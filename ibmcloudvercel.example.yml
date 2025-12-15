@@ -1,0 +1,70 @@
+# IBMCloudVercel Configuration
+# Copy this file to 'ibmcloudvercel.yml' and fill in your IBM Cloud details
+
+# IBM Cloud Configuration (REQUIRED)
+ibm_cloud:
+  # IBM Cloud region where Code Engine project is located
+  # Examples: us-south, us-east, eu-gb, eu-de, jp-tok, au-syd
+  region: "us-south"
+
+  # Code Engine project ID (found in IBM Cloud Console)
+  # Format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+  project_id: "your-project-id-here"
+
+  # Cloud Object Storage bucket name for staging source code
+  cos_bucket: "your-cos-bucket-name"
+
+  # Optional: Custom COS endpoint (auto-detected from region if not provided)
+  # cos_endpoint: "s3.us-south.cloud-object-storage.appdomain.cloud"
+
+  # Optional: Container Registry secret name (if using private registry)
+  # registry_secret: "my-registry-secret"
+
+  # ===== AUTHENTICATION (Choose ONE method) =====
+
+  # RECOMMENDED: OIDC Authentication (Most Secure - No static secrets!)
+  # Set this to use Vercel's OIDC token exchange via IBM Trusted Profile
+  # This requires setting up an IBM Cloud Trusted Profile that trusts Vercel's OIDC issuer
+  # Format: Profile-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+  trusted_profile_id: "Profile-your-trusted-profile-id"
+
+  # FALLBACK: API Key Authentication
+  # If trusted_profile_id is not set, falls back to using IBM_CLOUD_API_KEY env var
+  # Set IBM_CLOUD_API_KEY in Vercel Environment Variables
+  # Note: OIDC is preferred as it uses short-lived tokens instead of static secrets
+
+# Application Scaling Configuration (OPTIONAL)
+# These are sensible defaults - adjust based on your application needs
+scaling:
+  # Minimum number of instances (0 = scale to zero when idle)
+  min_scale: 0
+
+  # Maximum number of instances
+  max_scale: 10
+
+  # CPU allocation per instance (0.25, 0.5, 1.0, 2.0, 4.0, 8.0)
+  cpu: "0.25"
+
+  # Memory allocation per instance (0.5G, 1G, 2G, 4G, 8G, 16G, 32G)
+  memory: "0.5G"
+
+  # Application port (must match your app's listening port)
+  port: 8080
+
+  # Maximum concurrent requests per instance
+  concurrency: 100
+
+# Deployment Options (OPTIONAL)
+# Directory containing source code to deploy (relative to repo root)
+source_dir: "."
+
+# Whether to delete uploaded artifacts from COS after deployment
+cleanup_artifacts: true
+
+# Environment Variables (OPTIONAL)
+# Note: Set sensitive values like IBM_CLOUD_API_KEY in Vercel Environment Variables
+# env:
+#   - name: "NODE_ENV"
+#     value: "production"
+#   - name: "DATABASE_URL"
+#     value: "postgresql://..."
