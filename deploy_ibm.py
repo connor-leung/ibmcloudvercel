@@ -14,6 +14,7 @@ src_path = Path(__file__).parent / "src"
 if src_path.exists():
     sys.path.insert(0, str(src_path))
 
+from ibm_cloud_vercel.core import reporter
 from ibm_cloud_vercel.core.config import load_config
 from ibm_cloud_vercel.sdk import auth, cos
 
@@ -48,8 +49,15 @@ def main() -> int:
         )
         print("  ✓ Authentication successful")
 
-        # Step 3: Upload source code to COS
-        print("\n[3/4] Uploading source code to IBM Cloud Object Storage...")
+        # Step 3: Notify Vercel that deployment checks started
+        print("\n[3/4] Notifying Vercel Checks API...")
+        reporter.start_deployment_check(
+            deployment_id=config.vercel.deployment_id,
+            token=config.vercel.checks_token,
+        )
+
+        # Step 4: Upload source code to COS
+        print("\n[4/4] Uploading source code to IBM Cloud Object Storage...")
 
         cos_uploader = cos.create_cos_uploader(
             authenticator=authenticator,
@@ -65,8 +73,8 @@ def main() -> int:
 
         print(f"  Source uploaded: {cos_uri}")
 
-        # Step 4: Deploy to Code Engine (to be implemented in Phase 2)
-        print("\n[4/4] Deploying to Code Engine...")
+        # Code Engine deployment placeholder (Phase 2)
+        print("\nDeployment artifact ready for Code Engine (Phase 2 pending).")
         print("  ⚠️  Code Engine deployment not yet implemented (Phase 2)")
         print(f"  Next step: Use {cos_uri} to create/update Code Engine application")
 
