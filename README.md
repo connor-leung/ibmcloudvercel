@@ -11,6 +11,7 @@ IBMCloudVercel integrates into your Vercel build pipeline and automatically depl
 - **Automated Deployment**: Deploys directly from Vercel CI to IBM Cloud Code Engine
 - **Preview Deployments**: Creates separate Code Engine apps for each git branch/PR
 - **Source Code Staging**: Uses IBM Cloud Object Storage for secure source transfer
+- **OIDC Authentication**: Secure keyless authentication via Vercel OIDC tokens (no static secrets!)
 - **Vercel Integration**: Reports deployment status via Vercel Checks API
 - **Configurable Scaling**: Define min/max instances, CPU, memory via YAML config
 
