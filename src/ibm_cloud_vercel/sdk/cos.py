@@ -3,12 +3,41 @@
 import os
 import zipfile
 from datetime import datetime
+from fnmatch import fnmatch
 from pathlib import Path
 from typing import Optional
 
 import ibm_boto3
 from ibm_botocore.client import Config
 from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
+
+
+DEFAULT_EXCLUDE_PATTERNS = [
+    ".git",
+    ".gitmodules",
+    ".github",
+    ".cache",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".venv",
+    "venv",
+    ".env",
+    ".env.local",
+    "node_modules",
+    ".next",
+    ".vercel",
+    "__pycache__",
+    "*.pyc",
+    "*.pyo",
+    "*.pyd",
+    "*.log",
+    "*.tmp",
+    "*.swp",
+    ".DS_Store",
+    "dist",
+    "build",
+    "coverage",
+]
 
 
 class COSUploader:
@@ -60,19 +89,7 @@ class COSUploader:
             Path to the created zip file
         """
         if exclude_patterns is None:
-            exclude_patterns = [
-                ".git",
-                ".gitignore",
-                "__pycache__",
-                "*.pyc",
-                ".env",
-                ".env.local",
-                "node_modules",
-                ".next",
-                ".vercel",
-                "venv",
-                ".venv",
-            ]
+            exclude_patterns = DEFAULT_EXCLUDE_PATTERNS.copy()
 
         source_path = Path(source_dir).resolve()
 
@@ -88,11 +105,23 @@ class COSUploader:
         output_file.parent.mkdir(parents=True, exist_ok=True)
 
         def should_exclude(file_path: Path) -> bool:
-            """Check if file should be excluded based on patterns."""
-            relative_path = str(file_path.relative_to(source_path))
+            """Check if file should be excluded based on glob/base-name rules."""
+            relative_path = file_path.relative_to(source_path)
+            relative_str = relative_path.as_posix()
+            parts = relative_path.parts
+
             for pattern in exclude_patterns:
-                if pattern in relative_path or file_path.name == pattern:
+                # Base-name pattern: treat as directory/file name exclusion if no globbing tokens
+                has_glob = any(token in pattern for token in ("*", "?", "[", "]"))
+                if not has_glob:
+                    if pattern in parts:
+                        return True
+                    continue
+
+                # Glob-aware checks (match both the filename and relative path)
+                if fnmatch(file_path.name, pattern) or fnmatch(relative_str, pattern):
                     return True
+
             return False
 
         # Create the zip archive
