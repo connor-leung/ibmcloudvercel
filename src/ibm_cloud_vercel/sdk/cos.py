@@ -5,11 +5,11 @@ import zipfile
 from datetime import datetime
 from fnmatch import fnmatch
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 import ibm_boto3
 from ibm_botocore.client import Config
-from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
+from ibm_cloud_sdk_core.authenticators import IAMAuthenticator, BearerTokenAuthenticator
 
 
 DEFAULT_EXCLUDE_PATTERNS = [
@@ -45,7 +45,7 @@ class COSUploader:
 
     def __init__(
         self,
-        authenticator: IAMAuthenticator,
+        authenticator: Union[IAMAuthenticator, BearerTokenAuthenticator],
         service_instance_id: str,
         endpoint: str,
         bucket_name: str,
@@ -54,7 +54,7 @@ class COSUploader:
         Initialize the COS uploader.
 
         Args:
-            authenticator: IBM Cloud IAM authenticator
+            authenticator: IBM Cloud authenticator (IAM or OIDC-based Bearer Token)
             service_instance_id: COS service instance ID (CRN)
             endpoint: COS endpoint URL
             bucket_name: Target bucket name
@@ -62,14 +62,31 @@ class COSUploader:
         self.bucket_name = bucket_name
         self.endpoint = endpoint
 
-        # Initialize IBM COS client using the authenticator
-        self.client = ibm_boto3.client(
-            "s3",
-            ibm_api_key_id=authenticator.token_manager.apikey,
-            ibm_service_instance_id=service_instance_id,
-            config=Config(signature_version="oauth"),
-            endpoint_url=f"https://{endpoint}",
-        )
+        # Initialize IBM COS client based on authenticator type
+        if isinstance(authenticator, IAMAuthenticator):
+            # Use API key for IAM authenticator
+            self.client = ibm_boto3.client(
+                "s3",
+                ibm_api_key_id=authenticator.token_manager.apikey,
+                ibm_service_instance_id=service_instance_id,
+                config=Config(signature_version="oauth"),
+                endpoint_url=f"https://{endpoint}",
+            )
+        elif isinstance(authenticator, BearerTokenAuthenticator):
+            # Use bearer token for OIDC authenticator
+            # ibm_boto3 accepts ibm_auth_token for token-based authentication
+            self.client = ibm_boto3.client(
+                "s3",
+                ibm_auth_token=authenticator.bearer_token,
+                ibm_service_instance_id=service_instance_id,
+                config=Config(signature_version="oauth"),
+                endpoint_url=f"https://{endpoint}",
+            )
+        else:
+            raise TypeError(
+                f"Unsupported authenticator type: {type(authenticator).__name__}. "
+                "Expected IAMAuthenticator or BearerTokenAuthenticator."
+            )
 
     def create_source_archive(
         self,
@@ -231,7 +248,7 @@ class COSUploader:
 
 
 def create_cos_uploader(
-    authenticator: IAMAuthenticator,
+    authenticator: Union[IAMAuthenticator, BearerTokenAuthenticator],
     region: str,
     bucket_name: str,
     endpoint: Optional[str] = None,
@@ -240,7 +257,7 @@ def create_cos_uploader(
     Factory function to create a COSUploader instance.
 
     Args:
-        authenticator: IBM Cloud IAM authenticator
+        authenticator: IBM Cloud authenticator (IAM or OIDC-based Bearer Token)
         region: IBM Cloud region (e.g., 'us-south')
         bucket_name: COS bucket name
         endpoint: Optional custom endpoint (auto-detected if not provided)
@@ -268,7 +285,7 @@ def create_cos_uploader(
 
 
 def upload_source(
-    authenticator: IAMAuthenticator,
+    authenticator: Union[IAMAuthenticator, BearerTokenAuthenticator],
     source_path: str,
     bucket_name: str,
     region: str = "us-south",
@@ -279,9 +296,10 @@ def upload_source(
     High-level function to upload source code to COS.
 
     This is the primary function to use from the CODING_PLAN workflow.
+    Supports both API key (IAMAuthenticator) and OIDC token (BearerTokenAuthenticator) authentication.
 
     Args:
-        authenticator: IBM Cloud IAM authenticator
+        authenticator: IBM Cloud authenticator (IAM or OIDC-based Bearer Token)
         source_path: Directory containing source code to upload
         bucket_name: COS bucket name
         region: IBM Cloud region (default: 'us-south')
@@ -293,8 +311,13 @@ def upload_source(
 
     Example:
         >>> from ibm_cloud_vercel.sdk import auth, cos
+        >>> # Using API key
         >>> authenticator = auth.create_iam_authenticator()
         >>> cos_uri = cos.upload_source(authenticator, ".", "my-bucket")
+        >>>
+        >>> # Using OIDC token
+        >>> oidc_auth = auth.create_iam_authenticator_oidc(oidc_token, profile_id)
+        >>> cos_uri = cos.upload_source(oidc_auth, ".", "my-bucket")
     """
     if deployment_id is None:
         deployment_id = os.getenv("VERCEL_DEPLOYMENT_ID", "local")
