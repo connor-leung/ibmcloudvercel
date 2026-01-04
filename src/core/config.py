@@ -1,11 +1,58 @@
 """Configuration parser and validator for IBMCloudVercel."""
 
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import yaml
+
+
+# Pattern to match ${VAR_NAME} or ${VAR_NAME:-default}
+ENV_VAR_PATTERN = re.compile(r"\$\{([^}:]+)(?::-([^}]*))?\}")
+
+
+def expand_env_vars(value: str) -> str:
+    """
+    Expand environment variables in a string.
+
+    Supports:
+        ${VAR_NAME} - replaced with env var value, empty string if not set
+        ${VAR_NAME:-default} - replaced with env var value, or 'default' if not set
+
+    Args:
+        value: String potentially containing ${VAR_NAME} patterns
+
+    Returns:
+        String with environment variables expanded
+    """
+    def replace_match(match: re.Match) -> str:
+        var_name = match.group(1)
+        default_value = match.group(2) if match.group(2) is not None else ""
+        return os.getenv(var_name, default_value)
+
+    return ENV_VAR_PATTERN.sub(replace_match, value)
+
+
+def expand_env_vars_in_data(data: Any) -> Any:
+    """
+    Recursively expand environment variables in a data structure.
+
+    Args:
+        data: Any data structure (dict, list, str, etc.)
+
+    Returns:
+        Data structure with all string values having env vars expanded
+    """
+    if isinstance(data, dict):
+        return {key: expand_env_vars_in_data(value) for key, value in data.items()}
+    elif isinstance(data, list):
+        return [expand_env_vars_in_data(item) for item in data]
+    elif isinstance(data, str):
+        return expand_env_vars(data)
+    else:
+        return data
 
 
 @dataclass
@@ -116,6 +163,9 @@ class DeploymentConfig:
 
         if not data:
             raise ValueError(f"Configuration file is empty: {config_path}")
+
+        # Expand environment variables in all string values
+        data = expand_env_vars_in_data(data)
 
         # Validate required sections
         if "ibm_cloud" not in data:
