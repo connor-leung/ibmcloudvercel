@@ -1,24 +1,29 @@
 # IBMCloudVercel Configuration
-# Copy this file to 'ibmcloudvercel.yml' and fill in your IBM Cloud details
+# Copy this file to 'ibmcloudvercel.yml' and customize as needed
+#
+# Environment Variable Support:
+#   Use ${VAR_NAME} syntax to reference environment variables
+#   Use ${VAR_NAME:-default} to provide a default value
+#   For Vercel: Set these in Project Settings > Environment Variables
 
 # IBM Cloud Configuration (REQUIRED)
 ibm_cloud:
   # IBM Cloud region where Code Engine project is located
   # Examples: us-south, us-east, eu-gb, eu-de, jp-tok, au-syd
-  region: "us-south"
+  region: "${IBM_CLOUD_REGION:-us-south}"
 
   # Code Engine project ID (found in IBM Cloud Console)
   # Format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-  project_id: "your-project-id-here"
+  project_id: "${IBM_CODE_ENGINE_PROJECT_ID}"
 
   # Cloud Object Storage bucket name for staging source code
-  cos_bucket: "your-cos-bucket-name"
+  cos_bucket: "${IBM_COS_BUCKET_NAME}"
 
   # Optional: Custom COS endpoint (auto-detected from region if not provided)
-  # cos_endpoint: "s3.us-south.cloud-object-storage.appdomain.cloud"
+  # cos_endpoint: "${IBM_COS_ENDPOINT}"
 
   # Optional: Container Registry secret name (if using private registry)
-  # registry_secret: "my-registry-secret"
+  # registry_secret: "${IBM_REGISTRY_SECRET}"
 
   # ===== AUTHENTICATION (Choose ONE method) =====
 
@@ -26,7 +31,7 @@ ibm_cloud:
   # Set this to use Vercel's OIDC token exchange via IBM Trusted Profile
   # This requires setting up an IBM Cloud Trusted Profile that trusts Vercel's OIDC issuer
   # Format: Profile-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-  trusted_profile_id: "Profile-your-trusted-profile-id"
+  # trusted_profile_id: "${IBM_TRUSTED_PROFILE_ID}"
 
   # FALLBACK: API Key Authentication
   # If trusted_profile_id is not set, falls back to using IBM_CLOUD_API_KEY env var
