@@ -9,14 +9,18 @@ It is designed to run in the Vercel build environment as a custom build command.
 import sys
 from pathlib import Path
 
+# Auto-load .env file for local development
+from dotenv import load_dotenv
+load_dotenv()
+
 # Add src directory to Python path for local development
 src_path = Path(__file__).parent / "src"
 if src_path.exists():
     sys.path.insert(0, str(src_path))
 
-from ibm_cloud_vercel.core import reporter
-from ibm_cloud_vercel.core.config import load_config
-from ibm_cloud_vercel.sdk import auth, cos
+from core import reporter
+from core.config import load_config
+from sdk import auth, cos
 
 
 def main() -> int:
