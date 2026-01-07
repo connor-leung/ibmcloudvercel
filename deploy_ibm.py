@@ -34,9 +34,9 @@ from core.exceptions import (
     IBMCloudVercelError,
     ConfigurationError,
     AuthenticationError,
-    COSUploadError,
+    CodeEngineError,
 )
-from sdk import auth, cos
+from sdk import auth, code_engine
 
 
 # Global config reference for error reporting
@@ -69,7 +69,6 @@ def main() -> int:
         Exit code (0 for success, non-zero for failure)
     """
     global _config
-    zip_path = None  # Track for cleanup on failure
 
     print("=" * 70)
     print("IBMCloudVercel - Deploying to IBM Cloud Code Engine")
@@ -89,15 +88,24 @@ def main() -> int:
         except ValueError as e:
             raise ConfigurationError("Invalid configuration", details=str(e)) from e
 
+        app_name = _config.vercel.get_app_name()
         print(f"  Region: {_config.ibm_cloud.region}")
         print(f"  Project ID: {_config.ibm_cloud.project_id}")
-        print(f"  COS Bucket: {_config.ibm_cloud.cos_bucket}")
-        print(f"  App Name: {_config.vercel.get_app_name()}")
+        print(f"  App Name: {app_name}")
+        print(f"  Git Repo: {_config.vercel.git_repo_url}")
         print(f"  Git Ref: {_config.vercel.git_commit_ref}")
         print(f"  Commit SHA: {_config.vercel.git_commit_sha[:8]}")
+        print(f"  Build Strategy: {_config.ibm_cloud.build_strategy}")
+
+        # Validate git repo URL is available
+        if not _config.vercel.git_repo_url:
+            raise ConfigurationError(
+                "Git repository URL not available",
+                details="Set VERCEL_GIT_REPO_SLUG environment variable or run in Vercel environment."
+            )
 
         # Step 2: Authenticate with IBM Cloud
-        print("\n[2/4] Authenticating with IBM Cloud...")
+        print("\n[2/6] Authenticating with IBM Cloud...")
         try:
             authenticator = auth.get_authenticator(
                 trusted_profile_id=_config.ibm_cloud.trusted_profile_id
@@ -110,71 +118,128 @@ def main() -> int:
             ) from e
         print("  ✓ Authentication successful")
 
-        # Step 3: Notify Vercel that deployment checks started
-        print("\n[3/4] Notifying Vercel Checks API...")
+        # Step 3: Validate Code Engine project access
+        print("\n[3/6] Validating Code Engine project...")
+        try:
+            resolved_project_id = code_engine.validate_project_access(
+                authenticator=authenticator,
+                region=_config.ibm_cloud.region,
+                project_id_or_name=_config.ibm_cloud.project_id,
+            )
+            # Update config with resolved project ID if it was a name
+            if resolved_project_id != _config.ibm_cloud.project_id:
+                _config.ibm_cloud.project_id = resolved_project_id
+        except ValueError as e:
+            # Invalid project name format
+            raise ConfigurationError(
+                "Invalid Code Engine project name",
+                details=str(e)
+            ) from e
+        except RuntimeError as e:
+            raise CodeEngineError(
+                "Code Engine project validation failed",
+                details=str(e)
+            ) from e
+        print(f"  ✓ Project validated: {resolved_project_id}")
+
+        # Step 4: Notify Vercel that deployment checks started
+        print("\n[4/6] Notifying Vercel Checks API...")
         reporter.start_deployment_check(
             deployment_id=_config.vercel.deployment_id,
             token=_config.vercel.checks_token,
         )
 
-        # Step 4: Upload source code to COS
-        print("\n[4/4] Uploading source code to IBM Cloud Object Storage...")
+        # Create Code Engine client for build and deploy
+        ce_client = code_engine.create_code_engine_client(
+            authenticator=authenticator,
+            region=_config.ibm_cloud.region,
+        )
+
+        # Step 5: Create/update build configuration and run build
+        print("\n[5/6] Building container image...")
+        build_name = f"{app_name}-build"
+        output_image = _config.ibm_cloud.get_output_image(
+            app_name=app_name,
+            tag=_config.vercel.git_commit_sha[:8],
+        )
+
+        # Check if registry_secret is configured
+        if not _config.ibm_cloud.registry_secret:
+            raise ConfigurationError(
+                "Registry secret not configured",
+                details="Set 'registry_secret' in ibmcloudvercel.yml to the name of your "
+                        "Code Engine secret with ICR credentials. Create one with: "
+                        "ibmcloud ce secret create --name icr-secret --format registry "
+                        "--server private.us.icr.io --username iamapikey --password <API_KEY>"
+            )
+
         try:
-            cos_uploader = cos.create_cos_uploader(
-                authenticator=authenticator,
-                region=_config.ibm_cloud.region,
-                bucket_name=_config.ibm_cloud.cos_bucket,
-                endpoint=_config.ibm_cloud.cos_endpoint,
+            # Create or update the build configuration
+            print(f"  Creating build configuration: {build_name}")
+            code_engine.create_build(
+                client=ce_client,
+                project_id=resolved_project_id,
+                name=build_name,
+                source_url=_config.vercel.git_repo_url,
+                source_revision=_config.vercel.git_commit_sha,
+                output_image=output_image,
+                output_secret=_config.ibm_cloud.registry_secret,
+                strategy_type=_config.ibm_cloud.build_strategy,
+                strategy_size=_config.ibm_cloud.build_size,
+                source_context_dir=_config.source_dir if _config.source_dir != "." else "",
+                strategy_spec_file=_config.ibm_cloud.dockerfile_path or "",
+                timeout=_config.ibm_cloud.build_timeout,
             )
+            print(f"  ✓ Build configuration ready")
 
-            cos_uri, zip_path = cos_uploader.upload_source_code(
-                source_dir=_config.source_dir,
-                deployment_id=_config.vercel.deployment_id,
+            # Run the build
+            print(f"  Starting build...")
+            code_engine.run_build(
+                client=ce_client,
+                project_id=resolved_project_id,
+                build_name=build_name,
+                timeout=_config.ibm_cloud.build_timeout,
+                poll_interval=15,
             )
+            print(f"  ✓ Image built: {output_image}")
+
         except RuntimeError as e:
-            error_msg = str(e)
-            if "NoSuchBucket" in error_msg:
-                raise COSUploadError(
-                    "COS bucket not found",
-                    details=f"Bucket '{_config.ibm_cloud.cos_bucket}' does not exist. "
-                            "Create it in IBM Cloud Object Storage first."
-                ) from e
-            elif "AccessDenied" in error_msg:
-                raise COSUploadError(
-                    "COS access denied",
-                    details="Check that your API key has write permissions to the bucket."
-                ) from e
-            else:
-                raise COSUploadError("Failed to upload to COS", details=error_msg) from e
-        except Exception as e:
-            raise COSUploadError("COS upload failed", details=str(e)) from e
+            raise CodeEngineError("Build failed", details=str(e)) from e
 
-        print(f"  ✓ Source uploaded: {cos_uri}")
+        # Step 6: Deploy the application
+        print("\n[6/6] Deploying application to Code Engine...")
+        try:
+            app = code_engine.deploy_app(
+                client=ce_client,
+                project_id=resolved_project_id,
+                name=app_name,
+                image_reference=output_image,
+                image_port=_config.scaling.port,
+                scale_min_instances=_config.scaling.min_scale,
+                scale_max_instances=_config.scaling.max_scale,
+                scale_cpu_limit=_config.scaling.cpu,
+                scale_memory_limit=_config.scaling.memory,
+                scale_concurrency=_config.scaling.concurrency,
+            )
+            app_url = code_engine.get_app_url(app)
+            print(f"  ✓ Application deployed: {app_url}")
 
-        # Code Engine deployment placeholder (Phase 2)
-        print("\n" + "-" * 70)
-        print("Deployment artifact ready for Code Engine (Phase 2 pending).")
-        print("  ⚠️  Code Engine deployment not yet implemented")
-        print(f"  Next step: Use {cos_uri} to create/update Code Engine application")
-        print("-" * 70)
+        except RuntimeError as e:
+            raise CodeEngineError("Application deployment failed", details=str(e)) from e
 
         # Report success to Vercel
         reporter.complete_deployment_check(
             deployment_id=_config.vercel.deployment_id,
             token=_config.vercel.checks_token,
             status="succeeded",
-            url=None,  # Will be Code Engine URL in Phase 2
+            url=app_url,
         )
 
         # Success
         print("\n" + "=" * 70)
-        print("✅ Phase 1 Complete! Source code uploaded to COS.")
+        print("✅ Deployment Complete!")
+        print(f"   Application URL: {app_url}")
         print("=" * 70)
-
-        # Cleanup (optional)
-        if _config.cleanup_artifacts and zip_path:
-            print(f"\nCleaning up local artifact: {zip_path}")
-            Path(zip_path).unlink(missing_ok=True)
 
         return 0
 
@@ -190,12 +255,10 @@ def main() -> int:
         _report_failure(e)
         return e.exit_code
 
-    except COSUploadError as e:
-        print(f"\n❌ COS Upload Error (exit code {e.exit_code})", file=sys.stderr)
+    except CodeEngineError as e:
+        print(f"\n❌ Code Engine Error (exit code {e.exit_code})", file=sys.stderr)
         print(f"   {e}", file=sys.stderr)
         _report_failure(e)
-        if zip_path:
-            Path(zip_path).unlink(missing_ok=True)
         return e.exit_code
 
     except IBMCloudVercelError as e:
@@ -215,8 +278,6 @@ def main() -> int:
         import traceback
         traceback.print_exc()
         _report_failure(e)
-        if zip_path:
-            Path(zip_path).unlink(missing_ok=True)
         return 1
 
 

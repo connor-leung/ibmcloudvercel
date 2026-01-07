@@ -73,16 +73,29 @@ class IBMCloudConfig:
 
     region: str
     project_id: str
-    cos_bucket: str
+    cos_bucket: Optional[str] = None
     cos_endpoint: Optional[str] = None
     registry_secret: Optional[str] = None
     trusted_profile_id: Optional[str] = None  # For OIDC authentication
+    # Build configuration
+    registry_namespace: Optional[str] = None  # ICR namespace for built images
+    build_strategy: str = "buildpacks"  # "dockerfile" or "buildpacks"
+    build_size: str = "medium"  # "small", "medium", "large", "xlarge"
+    build_timeout: int = 600  # seconds
+    dockerfile_path: Optional[str] = None  # Path to Dockerfile if using dockerfile strategy
 
     def __post_init__(self) -> None:
-        """Auto-detect COS endpoint if not provided."""
+        """Auto-detect endpoints and validate configuration."""
         # Auto-detect COS endpoint if not provided
         if not self.cos_endpoint:
             self.cos_endpoint = f"s3.{self.region}.cloud-object-storage.appdomain.cloud"
+
+    def get_output_image(self, app_name: str, tag: str) -> str:
+        """Generate the output image reference for a build."""
+        # Use IBM Container Registry (ICR)
+        icr_region = self.region if self.region != "us-south" else "us"
+        namespace = self.registry_namespace or "code-engine"
+        return f"private.{icr_region}.icr.io/{namespace}/{app_name}:{tag}"
 
 
 @dataclass
@@ -91,6 +104,8 @@ class VercelConfig:
 
     git_commit_sha: str
     git_commit_ref: str
+    git_repo_url: str
+    git_provider: str
     deployment_id: str
     project_name: str
     checks_token: Optional[str] = None
@@ -104,9 +119,26 @@ class VercelConfig:
         project_name = os.getenv("VERCEL_PROJECT_NAME", "app")
         checks_token = os.getenv("VERCEL_CHECKS_TOKEN")
 
+        # Git provider and repo info
+        git_provider = os.getenv("VERCEL_GIT_PROVIDER", "github")
+        git_repo_slug = os.getenv("VERCEL_GIT_REPO_SLUG", "")
+
+        # Construct full git URL based on provider
+        if git_repo_slug:
+            provider_urls = {
+                "github": f"https://github.com/{git_repo_slug}",
+                "gitlab": f"https://gitlab.com/{git_repo_slug}",
+                "bitbucket": f"https://bitbucket.org/{git_repo_slug}",
+            }
+            git_repo_url = provider_urls.get(git_provider, f"https://github.com/{git_repo_slug}")
+        else:
+            git_repo_url = ""
+
         return cls(
             git_commit_sha=git_commit_sha,
             git_commit_ref=git_commit_ref,
+            git_repo_url=git_repo_url,
+            git_provider=git_provider,
             deployment_id=deployment_id,
             project_name=project_name,
             checks_token=checks_token,
@@ -173,7 +205,7 @@ class DeploymentConfig:
 
         # Parse IBM Cloud config
         ibm_config_data = data["ibm_cloud"]
-        required_fields = ["region", "project_id", "cos_bucket"]
+        required_fields = ["region", "project_id"]
         missing_fields = [f for f in required_fields if f not in ibm_config_data]
 
         if missing_fields:
@@ -184,10 +216,15 @@ class DeploymentConfig:
         ibm_cloud = IBMCloudConfig(
             region=ibm_config_data["region"],
             project_id=ibm_config_data["project_id"],
-            cos_bucket=ibm_config_data["cos_bucket"],
+            cos_bucket=ibm_config_data.get("cos_bucket"),
             cos_endpoint=ibm_config_data.get("cos_endpoint"),
             registry_secret=ibm_config_data.get("registry_secret"),
             trusted_profile_id=ibm_config_data.get("trusted_profile_id"),
+            registry_namespace=ibm_config_data.get("registry_namespace"),
+            build_strategy=ibm_config_data.get("build_strategy", "buildpacks"),
+            build_size=ibm_config_data.get("build_size", "medium"),
+            build_timeout=ibm_config_data.get("build_timeout", 600),
+            dockerfile_path=ibm_config_data.get("dockerfile_path"),
         )
 
         # Parse scaling config (optional, uses defaults if not provided)

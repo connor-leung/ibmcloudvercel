@@ -12,18 +12,33 @@ ibm_cloud:
   # Examples: us-south, us-east, eu-gb, eu-de, jp-tok, au-syd
   region: "${IBM_CLOUD_REGION:-us-south}"
 
-  # Code Engine project ID (found in IBM Cloud Console)
-  # Format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+  # Code Engine project ID or name (found in IBM Cloud Console)
+  # Can be either:
+  #   - Project ID (UUID format): xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+  #   - Project name: my-project-name (will be resolved to ID automatically)
   project_id: "${IBM_CODE_ENGINE_PROJECT_ID}"
 
-  # Cloud Object Storage bucket name for staging source code
-  cos_bucket: "${IBM_COS_BUCKET_NAME}"
+  # Registry secret for pushing built images to IBM Container Registry
+  # Create with: ibmcloud ce secret create --name icr-secret --format registry \
+  #              --server private.us.icr.io --username iamapikey --password <API_KEY>
+  registry_secret: "${IBM_REGISTRY_SECRET:-icr-secret}"
 
-  # Optional: Custom COS endpoint (auto-detected from region if not provided)
-  # cos_endpoint: "${IBM_COS_ENDPOINT}"
+  # Optional: ICR namespace for built images (default: code-engine)
+  # registry_namespace: "my-namespace"
 
-  # Optional: Container Registry secret name (if using private registry)
-  # registry_secret: "${IBM_REGISTRY_SECRET}"
+  # ===== BUILD CONFIGURATION =====
+
+  # Build strategy: "buildpacks" (auto-detect) or "dockerfile"
+  build_strategy: "buildpacks"
+
+  # Build resource size: "small", "medium", "large", "xlarge"
+  build_size: "medium"
+
+  # Build timeout in seconds (default: 600 = 10 minutes)
+  build_timeout: 600
+
+  # Path to Dockerfile (only used when build_strategy is "dockerfile")
+  # dockerfile_path: "Dockerfile"
 
   # ===== AUTHENTICATION (Choose ONE method) =====
 
@@ -37,6 +52,11 @@ ibm_cloud:
   # If trusted_profile_id is not set, falls back to using IBM_CLOUD_API_KEY env var
   # Set IBM_CLOUD_API_KEY in Vercel Environment Variables
   # Note: OIDC is preferred as it uses short-lived tokens instead of static secrets
+
+  # ===== OPTIONAL: COS CONFIGURATION =====
+  # Only needed if you want to use COS for artifact storage
+  # cos_bucket: "${IBM_COS_BUCKET_NAME}"
+  # cos_endpoint: "${IBM_COS_ENDPOINT}"
 
 # Application Scaling Configuration (OPTIONAL)
 # These are sensible defaults - adjust based on your application needs
@@ -62,14 +82,3 @@ scaling:
 # Deployment Options (OPTIONAL)
 # Directory containing source code to deploy (relative to repo root)
 source_dir: "."
-
-# Whether to delete uploaded artifacts from COS after deployment
-cleanup_artifacts: true
-
-# Environment Variables (OPTIONAL)
-# Note: Set sensitive values like IBM_CLOUD_API_KEY in Vercel Environment Variables
-# env:
-#   - name: "NODE_ENV"
-#     value: "production"
-#   - name: "DATABASE_URL"
-#     value: "postgresql://..."
