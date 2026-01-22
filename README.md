@@ -109,17 +109,6 @@ See [ibmcloudvercel.example.yml](ibmcloudvercel.example.yml) for a complete conf
 - `source_dir`: Source directory to deploy (default: `.`)
 - `cleanup_artifacts`: Delete COS artifacts after deployment (default: `true`)
 
-## Next Steps (Phase 2)
-
-- [ ] Implement Code Engine SDK wrapper
-- [ ] Add application create/update logic
-- [ ] Implement deployment status polling
-- [ ] Extract and return public URL
-
-## License
-
-MIT
-
 ## Author
 
 Connor Leung
