@@ -15,15 +15,6 @@ IBMCloudVercel integrates into your Vercel build pipeline and automatically depl
 - **Vercel Integration**: Reports deployment status via Vercel Checks API
 - **Configurable Scaling**: Define min/max instances, CPU, memory via YAML config
 
-## Phase 1 Complete ✅
-
-The following components have been implemented:
-
-- ✅ Python project structure (src-layout)
-- ✅ Configuration parsing ([ibmcloudvercel.yml](ibmcloudvercel.yml))
-- ✅ Source code archiving and COS upload
-- ✅ Main deployment orchestrator ([deploy_ibm.py](deploy_ibm.py))
-
 ### Project Structure
 
 ```text
