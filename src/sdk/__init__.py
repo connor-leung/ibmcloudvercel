@@ -1,5 +1,5 @@
 """IBM Cloud SDK wrappers for Code Engine deployment."""
 
-from . import auth, cos
+from . import auth, code_engine, cos
 
-__all__ = ["auth", "cos"]
+__all__ = ["auth", "code_engine", "cos"]
