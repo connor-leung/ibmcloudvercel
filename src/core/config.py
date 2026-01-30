@@ -115,12 +115,17 @@ class VercelConfig:
     def get_app_name(self) -> str:
         """Generate a Code Engine app name based on the git branch."""
         # Sanitize branch name for Code Engine (lowercase, alphanumeric + hyphens)
-        sanitized_ref = self.git_commit_ref.lower().replace("/", "-").replace("_", "-")
-        # Remove any non-alphanumeric characters except hyphens
-        sanitized_ref = "".join(c for c in sanitized_ref if c.isalnum() or c == "-")
+        raw_ref = self.git_commit_ref or "main"
+        sanitized_ref = raw_ref.lower().replace("/", "-").replace("_", "-")
+        sanitized_ref = re.sub(r"[^a-z0-9-]", "-", sanitized_ref)
+        sanitized_ref = re.sub(r"-{2,}", "-", sanitized_ref).strip("-")
+
+        if not sanitized_ref:
+            sanitized_ref = "app"
+
         # Ensure it starts with a letter
         if not sanitized_ref[0].isalpha():
-            sanitized_ref = "app-" + sanitized_ref
+            sanitized_ref = f"app-{sanitized_ref}"
 
         return f"{self.project_name}-{sanitized_ref}"[:63]  # Code Engine name limit
 
