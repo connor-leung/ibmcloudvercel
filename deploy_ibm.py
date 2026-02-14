@@ -17,6 +17,7 @@ Exit Codes:
 """
 
 import sys
+import os
 from pathlib import Path
 
 # Auto-load .env file for local development
@@ -35,8 +36,9 @@ from core.exceptions import (
     ConfigurationError,
     AuthenticationError,
     COSUploadError,
+    CodeEngineError,
 )
-from sdk import auth, cos
+from sdk import auth, cos, code_engine
 
 
 # Global config reference for error reporting
@@ -118,7 +120,7 @@ def main() -> int:
         )
 
         # Step 4: Upload source code to COS
-        print("\n[4/4] Uploading source code to IBM Cloud Object Storage...")
+        print("\n[4/5] Uploading source code to IBM Cloud Object Storage...")
         try:
             cos_uploader = cos.create_cos_uploader(
                 authenticator=authenticator,
@@ -151,24 +153,61 @@ def main() -> int:
 
         print(f"  ✓ Source uploaded: {cos_uri}")
 
-        # Code Engine deployment placeholder (Phase 2)
-        print("\n" + "-" * 70)
-        print("Deployment artifact ready for Code Engine (Phase 2 pending).")
-        print("  ⚠️  Code Engine deployment not yet implemented")
-        print(f"  Next step: Use {cos_uri} to create/update Code Engine application")
-        print("-" * 70)
+        # Step 5: Deploy app to Code Engine and wait for ready status
+        print("\n[5/5] Deploying application to IBM Cloud Code Engine...")
+        app_name = _config.vercel.get_app_name()
+        image_reference = (
+            os.getenv("IBM_CODE_ENGINE_IMAGE_REFERENCE")
+            or os.getenv("IBM_CODE_ENGINE_IMAGE")
+        )
+        if not image_reference:
+            raise CodeEngineError(
+                "Code Engine image reference is not configured",
+                details=(
+                    "Set IBM_CODE_ENGINE_IMAGE_REFERENCE (or IBM_CODE_ENGINE_IMAGE) "
+                    "to the container image to deploy."
+                ),
+            )
+
+        try:
+            app_payload = code_engine.build_code_engine_app_payload(
+                name=app_name,
+                image_reference=image_reference,
+                scaling=_config.scaling,
+                registry_secret=_config.ibm_cloud.registry_secret,
+            )
+
+            app_data, public_url = code_engine.deploy_application(
+                authenticator=authenticator,
+                region=_config.ibm_cloud.region,
+                project_id=_config.ibm_cloud.project_id,
+                app_name=app_name,
+                payload=app_payload,
+            )
+        except CodeEngineError:
+            raise
+        except Exception as e:
+            raise CodeEngineError("Code Engine deployment failed", details=str(e)) from e
+
+        print(f"  ✓ Code Engine app ready: {app_data.get('name', app_name)}")
+        if public_url:
+            print(f"  ✓ Public URL: {public_url}")
+        else:
+            print("  ⚠️  App is ready, but no public endpoint was returned by Code Engine.")
 
         # Report success to Vercel
         reporter.complete_deployment_check(
             deployment_id=_config.vercel.deployment_id,
             token=_config.vercel.checks_token,
             status="succeeded",
-            url=None,  # Will be Code Engine URL in Phase 2
+            url=public_url,
         )
 
         # Success
         print("\n" + "=" * 70)
-        print("✅ Phase 1 Complete! Source code uploaded to COS.")
+        print("✅ Deployment complete! Application is running on Code Engine.")
+        if public_url:
+            print(f"   URL: {public_url}")
         print("=" * 70)
 
         # Cleanup (optional)
@@ -202,6 +241,8 @@ def main() -> int:
         print(f"\n❌ Deployment Error (exit code {e.exit_code})", file=sys.stderr)
         print(f"   {e}", file=sys.stderr)
         _report_failure(e)
+        if zip_path:
+            Path(zip_path).unlink(missing_ok=True)
         return e.exit_code
 
     except KeyboardInterrupt:
