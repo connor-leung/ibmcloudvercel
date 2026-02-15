@@ -45,6 +45,45 @@ from sdk import auth, cos, code_engine
 _config = None
 
 
+def _validate_runtime_requirements() -> None:
+    """Validate required config and environment values before cloud operations."""
+    global _config
+    if _config is None:
+        raise ConfigurationError("Configuration is not loaded")
+
+    missing_config: list[str] = []
+    if not _config.ibm_cloud.project_id:
+        missing_config.append("ibm_cloud.project_id")
+    if not _config.ibm_cloud.cos_bucket:
+        missing_config.append("ibm_cloud.cos_bucket")
+
+    if missing_config:
+        raise ConfigurationError(
+            "Missing required IBM Cloud configuration values",
+            details=", ".join(missing_config),
+        )
+
+    has_oidc = bool(_config.ibm_cloud.trusted_profile_id and os.getenv("VERCEL_OIDC_TOKEN"))
+    has_api_key = bool(os.getenv("IBM_CLOUD_API_KEY"))
+    if not has_oidc and not has_api_key:
+        raise ConfigurationError(
+            "No valid IBM authentication source found",
+            details=(
+                "Set VERCEL_OIDC_TOKEN and ibm_cloud.trusted_profile_id for OIDC, "
+                "or set IBM_CLOUD_API_KEY as fallback."
+            ),
+        )
+
+    if not os.getenv("IBM_COS_SERVICE_INSTANCE_ID"):
+        raise ConfigurationError(
+            "Missing IBM Cloud Object Storage service instance ID",
+            details=(
+                "Set IBM_COS_SERVICE_INSTANCE_ID (COS CRN). "
+                "This is required for COS upload operations."
+            ),
+        )
+
+
 def _report_failure(error: Exception) -> None:
     """Report deployment failure to Vercel Checks API."""
     global _config
@@ -97,6 +136,7 @@ def main() -> int:
         print(f"  App Name: {_config.vercel.get_app_name()}")
         print(f"  Git Ref: {_config.vercel.git_commit_ref}")
         print(f"  Commit SHA: {_config.vercel.git_commit_sha[:8]}")
+        _validate_runtime_requirements()
 
         # Step 2: Authenticate with IBM Cloud
         print("\n[2/4] Authenticating with IBM Cloud...")
@@ -106,6 +146,11 @@ def main() -> int:
             )
         except ValueError as e:
             raise AuthenticationError("Authentication failed", details=str(e)) from e
+        except RuntimeError as e:
+            raise AuthenticationError(
+                "IBM IAM token exchange failed",
+                details=str(e),
+            ) from e
         except Exception as e:
             raise AuthenticationError(
                 "IBM Cloud authentication failed", details=str(e)
@@ -146,8 +191,15 @@ def main() -> int:
                     "COS access denied",
                     details="Check that your API key has write permissions to the bucket."
                 ) from e
+            elif "IBM_COS_SERVICE_INSTANCE_ID is required" in error_msg:
+                raise COSUploadError(
+                    "COS configuration missing required service instance ID",
+                    details=error_msg,
+                ) from e
             else:
                 raise COSUploadError("Failed to upload to COS", details=error_msg) from e
+        except ValueError as e:
+            raise COSUploadError("Invalid COS configuration", details=str(e)) from e
         except Exception as e:
             raise COSUploadError("COS upload failed", details=str(e)) from e
 
@@ -187,7 +239,13 @@ def main() -> int:
         except CodeEngineError:
             raise
         except Exception as e:
-            raise CodeEngineError("Code Engine deployment failed", details=str(e)) from e
+            raise CodeEngineError(
+                "Code Engine deployment failed",
+                details=(
+                    "Unexpected error while calling Code Engine API. "
+                    f"{str(e)}"
+                ),
+            ) from e
 
         print(f"  ✓ Code Engine app ready: {app_data.get('name', app_name)}")
         if public_url:
