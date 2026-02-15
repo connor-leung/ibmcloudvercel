@@ -134,6 +134,7 @@ Webhook request notes:
 - `x-vercel-signature` is required and validated using HMAC-SHA1 over the raw request body.
 - Supported events: `deployment.created`, `deployment.ready`
 - Webhooks return immediately with `202` and are processed asynchronously by an in-process worker queue.
+- In integration mode, stored installation access tokens are forwarded to checks reporting.
 
 ## Configuration Reference
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from typing import Optional
+from urllib.parse import urlencode
 
 import requests
 
@@ -11,18 +12,38 @@ VERCEL_API_BASE = "https://api.vercel.com"
 CHECK_NAME = "ibm-cloud-vercel"
 
 
-def _get_checks_token(token: Optional[str] = None) -> Optional[str]:
-    """Resolve the Vercel checks token from the caller or environment."""
-    return token or os.getenv("VERCEL_CHECKS_TOKEN")
+def _resolve_checks_token(
+    token: Optional[str] = None,
+    installation_token: Optional[str] = None,
+) -> Optional[str]:
+    """Resolve a token usable for checks API calls."""
+    return (
+        token
+        or installation_token
+        or os.getenv("VERCEL_CHECKS_TOKEN")
+        or os.getenv("VERCEL_INSTALLATION_TOKEN")
+        or os.getenv("VERCEL_INTEGRATION_ACCESS_TOKEN")
+    )
+
+
+def _resolve_team_id(team_id: Optional[str] = None) -> Optional[str]:
+    """Resolve Vercel team scope for installation-token requests."""
+    return team_id or os.getenv("VERCEL_TEAM_ID")
 
 
 def _post_check_update(
     deployment_id: str,
     payload: dict,
     token: str,
+    *,
+    team_id: Optional[str] = None,
 ) -> None:
     """Send a check update to the Vercel API."""
     url = f"{VERCEL_API_BASE}/v1/deployments/{deployment_id}/checks"
+    resolved_team_id = _resolve_team_id(team_id)
+    if resolved_team_id:
+        url = f"{url}?{urlencode({'teamId': resolved_team_id})}"
+
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
@@ -38,6 +59,8 @@ def _post_check_update(
 def start_deployment_check(
     deployment_id: Optional[str],
     token: Optional[str] = None,
+    installation_token: Optional[str] = None,
+    team_id: Optional[str] = None,
     summary: str | None = None,
 ) -> None:
     """Create an in-progress deployment check in Vercel."""
@@ -45,9 +68,9 @@ def start_deployment_check(
         print("  ⚠️  Missing Vercel deployment ID; skipping check start.")
         return
 
-    resolved_token = _get_checks_token(token)
+    resolved_token = _resolve_checks_token(token, installation_token)
     if not resolved_token:
-        print("  ⚠️  Vercel checks token not provided; skipping check start.")
+        print("  ⚠️  Vercel checks/installation token not provided; skipping check start.")
         return
 
     payload = {
@@ -66,46 +89,70 @@ def start_deployment_check(
         ]
     }
 
-    _post_check_update(deployment_id, payload, resolved_token)
+    _post_check_update(
+        deployment_id,
+        payload,
+        resolved_token,
+        team_id=team_id,
+    )
 
 
 def complete_deployment_check(
     deployment_id: Optional[str],
     token: Optional[str] = None,
+    installation_token: Optional[str] = None,
+    team_id: Optional[str] = None,
     *,
     status: str,
     url: Optional[str] = None,
     error: Optional[str] = None,
+    details: Optional[str] = None,
 ) -> None:
     """Complete the deployment check with a final status."""
     if not deployment_id:
         print("  ⚠️  Missing Vercel deployment ID; skipping check completion.")
         return
 
-    resolved_token = _get_checks_token(token)
+    resolved_token = _resolve_checks_token(token, installation_token)
     if not resolved_token:
-        print("  ⚠️  Vercel checks token not provided; skipping check completion.")
+        print("  ⚠️  Vercel checks/installation token not provided; skipping check completion.")
         return
 
-    summary = (
-        f"Deployment succeeded. URL: {url}"
-        if status == "succeeded"
-        else f"Deployment failed: {error or 'Unknown error'}"
-    )
+    normalized_status = status if status in {"in-progress", "succeeded", "failed"} else "failed"
+    if normalized_status == "succeeded":
+        summary = "Deployment succeeded."
+        if url:
+            summary = f"{summary} URL: {url}"
+        if details:
+            summary = f"{summary} {details}"
+        title = "Deployment Succeeded"
+    elif normalized_status == "in-progress":
+        summary = details or "Deployment is in progress."
+        title = "Deployment In Progress"
+    else:
+        summary = f"Deployment failed: {error or 'Unknown error'}"
+        if details:
+            summary = f"{summary} {details}"
+        title = "Deployment Failed"
 
     payload = {
         "checks": [
             {
                 "name": CHECK_NAME,
-                "status": status,
+                "status": normalized_status,
                 "detailsUrl": url,
                 "externalId": deployment_id,
                 "output": {
-                    "title": "Deployment Result",
+                    "title": title,
                     "summary": summary,
                 },
             }
         ]
     }
 
-    _post_check_update(deployment_id, payload, resolved_token)
+    _post_check_update(
+        deployment_id,
+        payload,
+        resolved_token,
+        team_id=team_id,
+    )

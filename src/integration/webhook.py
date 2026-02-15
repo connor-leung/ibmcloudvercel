@@ -192,6 +192,8 @@ class DeploymentJobWorker:
             env["VERCEL_INTEGRATION_INSTALLATION_ID"] = event.installation_id
             installation = self._store.get_installation(event.installation_id)
             if installation and isinstance(installation.get("access_token"), str):
+                env.setdefault("VERCEL_INSTALLATION_TOKEN", installation["access_token"])
+                env.setdefault("VERCEL_INTEGRATION_ACCESS_TOKEN", installation["access_token"])
                 env.setdefault("VERCEL_CHECKS_TOKEN", installation["access_token"])
 
         print(
