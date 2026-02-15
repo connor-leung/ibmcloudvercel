@@ -67,4 +67,4 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "-v --cov=ibm_cloud_vercel --cov-report=term-missing"
+addopts = "-v --cov=src --cov-report=term-missing"

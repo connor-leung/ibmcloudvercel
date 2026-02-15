@@ -84,6 +84,12 @@ export IBM_COS_SERVICE_INSTANCE_ID="your-cos-service-crn"
 python deploy_ibm.py
 ```
 
+For local validation without mutating IBM Cloud resources:
+
+```bash
+IBM_CLOUD_VERCEL_DRY_RUN=true python deploy_ibm.py
+```
+
 ## Integration Backend Mode
 
 Use integration mode when running as a Vercel integration backend service instead of a local CLI build.

@@ -45,7 +45,17 @@ from sdk import auth, cos, code_engine
 _config = None
 
 
-def _validate_runtime_requirements() -> None:
+def _is_truthy(value: str | None) -> bool:
+    if value is None:
+        return False
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _is_dry_run_enabled() -> bool:
+    return _is_truthy(os.getenv("IBM_CLOUD_VERCEL_DRY_RUN"))
+
+
+def _validate_runtime_requirements(*, dry_run: bool = False) -> None:
     """Validate required config and environment values before cloud operations."""
     global _config
     if _config is None:
@@ -62,6 +72,9 @@ def _validate_runtime_requirements() -> None:
             "Missing required IBM Cloud configuration values",
             details=", ".join(missing_config),
         )
+
+    if dry_run:
+        return
 
     has_oidc = bool(_config.ibm_cloud.trusted_profile_id and os.getenv("VERCEL_OIDC_TOKEN"))
     has_api_key = bool(os.getenv("IBM_CLOUD_API_KEY"))
@@ -136,7 +149,46 @@ def main() -> int:
         print(f"  App Name: {_config.vercel.get_app_name()}")
         print(f"  Git Ref: {_config.vercel.git_commit_ref}")
         print(f"  Commit SHA: {_config.vercel.git_commit_sha[:8]}")
-        _validate_runtime_requirements()
+        dry_run = _is_dry_run_enabled()
+        if dry_run:
+            print("  ⚙️  Dry-run mode enabled (IBM_CLOUD_VERCEL_DRY_RUN=true)")
+        _validate_runtime_requirements(dry_run=dry_run)
+
+        if dry_run:
+            print("\n[dry-run] Validating deployment plan without mutating cloud resources...")
+            app_name = _config.vercel.get_app_name()
+            image_reference = (
+                os.getenv("IBM_CODE_ENGINE_IMAGE_REFERENCE")
+                or os.getenv("IBM_CODE_ENGINE_IMAGE")
+                or "dry-run/local-image:latest"
+            )
+            app_payload = code_engine.build_code_engine_app_payload(
+                name=app_name,
+                image_reference=image_reference,
+                scaling=_config.scaling,
+                registry_secret=_config.ibm_cloud.registry_secret,
+            )
+            print(f"  ✓ Generated Code Engine app payload for: {app_payload['name']}")
+            print(
+                "  ✓ Planned COS upload target: "
+                f"cos://{_config.ibm_cloud.cos_bucket}/deployments/{_config.vercel.deployment_id}/..."
+            )
+            reporter.start_deployment_check(
+                deployment_id=_config.vercel.deployment_id,
+                token=_config.vercel.checks_token,
+                summary="Dry-run: validating deployment plan without cloud mutations.",
+            )
+            reporter.complete_deployment_check(
+                deployment_id=_config.vercel.deployment_id,
+                token=_config.vercel.checks_token,
+                status="succeeded",
+                url=None,
+                details="Dry-run mode completed. No IBM Cloud resources were created or updated.",
+            )
+            print("\n" + "=" * 70)
+            print("✅ Dry-run complete. Configuration and payload generation succeeded.")
+            print("=" * 70)
+            return 0
 
         # Step 2: Authenticate with IBM Cloud
         print("\n[2/4] Authenticating with IBM Cloud...")
