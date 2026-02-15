@@ -3,12 +3,19 @@
 from __future__ import annotations
 
 import json
+import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
 from .store import InstallationStore
+from .webhook import (
+    SUPPORTED_WEBHOOK_EVENTS,
+    DeploymentJobWorker,
+    parse_webhook_event,
+    verify_webhook_signature,
+)
 
 
 def _safe_json(handler: BaseHTTPRequestHandler, payload: dict[str, Any], status: int) -> None:
@@ -21,11 +28,7 @@ def _safe_json(handler: BaseHTTPRequestHandler, payload: dict[str, Any], status:
 
 
 def _read_json_body(handler: BaseHTTPRequestHandler) -> dict[str, Any]:
-    content_length = int(handler.headers.get("Content-Length", "0"))
-    if content_length <= 0:
-        return {}
-
-    raw = handler.rfile.read(content_length)
+    raw = _read_raw_body(handler)
     if not raw:
         return {}
 
@@ -33,6 +36,13 @@ def _read_json_body(handler: BaseHTTPRequestHandler) -> dict[str, Any]:
     if not isinstance(parsed, dict):
         raise ValueError("JSON body must be an object")
     return parsed
+
+
+def _read_raw_body(handler: BaseHTTPRequestHandler) -> bytes:
+    content_length = int(handler.headers.get("Content-Length", "0"))
+    if content_length <= 0:
+        return b""
+    return handler.rfile.read(content_length)
 
 
 def _normalize_scope(payload: dict[str, Any]) -> dict[str, Any]:
@@ -47,7 +57,10 @@ def _normalize_scope(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _make_handler(store: InstallationStore) -> type[BaseHTTPRequestHandler]:
+def _make_handler(
+    store: InstallationStore,
+    worker: DeploymentJobWorker,
+) -> type[BaseHTTPRequestHandler]:
     class IntegrationHandler(BaseHTTPRequestHandler):
         server_version = "IBMCloudVercelIntegration/0.1"
 
@@ -65,6 +78,10 @@ def _make_handler(store: InstallationStore) -> type[BaseHTTPRequestHandler]:
 
         def do_POST(self) -> None:
             path = urlparse(self.path).path
+
+            if path == "/integration/webhook":
+                self._handle_webhook()
+                return
 
             try:
                 payload = _read_json_body(self)
@@ -129,15 +146,67 @@ def _make_handler(store: InstallationStore) -> type[BaseHTTPRequestHandler]:
                 200,
             )
 
+        def _handle_webhook(self) -> None:
+            raw = _read_raw_body(self)
+            signature = self.headers.get("x-vercel-signature")
+            secret = os.getenv("VERCEL_WEBHOOK_SECRET") or os.getenv("INTEGRATION_WEBHOOK_SECRET")
+
+            is_valid, error = verify_webhook_signature(
+                raw_body=raw,
+                signature_header=signature,
+                secret=secret,
+            )
+            if not is_valid:
+                _safe_json(self, {"error": error}, 401)
+                return
+
+            try:
+                payload = json.loads(raw.decode("utf-8")) if raw else {}
+            except json.JSONDecodeError as exc:
+                _safe_json(self, {"error": f"Invalid JSON payload: {exc}"}, 400)
+                return
+
+            if not isinstance(payload, dict):
+                _safe_json(self, {"error": "JSON body must be an object"}, 400)
+                return
+
+            event = parse_webhook_event(payload)
+            if event.event_type not in SUPPORTED_WEBHOOK_EVENTS:
+                _safe_json(
+                    self,
+                    {
+                        "status": "ignored",
+                        "reason": "unsupported_event",
+                        "event": event.event_type,
+                    },
+                    202,
+                )
+                return
+
+            queue_size = worker.enqueue(event)
+            _safe_json(
+                self,
+                {
+                    "status": "queued",
+                    "event": event.event_type,
+                    "deployment_id": event.deployment_id,
+                    "queue_size": queue_size,
+                },
+                202,
+            )
+
     return IntegrationHandler
 
 
 def run_server(host: str, port: int, store_path: str | Path) -> None:
     """Run the integration lifecycle service."""
     store = InstallationStore(store_path)
-    handler = _make_handler(store)
+    worker = DeploymentJobWorker(store=store)
+    worker.start()
+    handler = _make_handler(store, worker)
     server = ThreadingHTTPServer((host, port), handler)
 
     print(f"Starting integration service on http://{host}:{port}")
     print(f"Using installation store: {Path(store_path).resolve()}")
+    print("Webhook endpoint: POST /integration/webhook")
     server.serve_forever()

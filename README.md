@@ -99,6 +99,8 @@ Environment variables:
 - `INTEGRATION_HOST` (default: `127.0.0.1`)
 - `INTEGRATION_PORT` (default: `8787`)
 - `INTEGRATION_STORE_PATH` (default: `.ibmcloudvercel/installations.json`)
+- `VERCEL_WEBHOOK_SECRET` (required for webhook signature verification)
+- `INTEGRATION_DEPLOY_COMMAND` (default: `python deploy_ibm.py`)
 
 Endpoints:
 
@@ -106,6 +108,7 @@ Endpoints:
 - `POST /integration/install`
 - `POST /integration/update`
 - `POST /integration/uninstall`
+- `POST /integration/webhook`
 
 Install/update request example:
 
@@ -125,6 +128,12 @@ Uninstall request example:
   "installation_id": "ins_123"
 }
 ```
+
+Webhook request notes:
+
+- `x-vercel-signature` is required and validated using HMAC-SHA1 over the raw request body.
+- Supported events: `deployment.created`, `deployment.ready`
+- Webhooks return immediately with `202` and are processed asynchronously by an in-process worker queue.
 
 ## Configuration Reference
 
