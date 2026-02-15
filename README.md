@@ -84,6 +84,48 @@ export IBM_COS_SERVICE_INSTANCE_ID="your-cos-service-crn"
 python deploy_ibm.py
 ```
 
+## Integration Backend Mode
+
+Use integration mode when running as a Vercel integration backend service instead of a local CLI build.
+
+### Start Integration Service
+
+```bash
+python integration_service.py
+```
+
+Environment variables:
+
+- `INTEGRATION_HOST` (default: `127.0.0.1`)
+- `INTEGRATION_PORT` (default: `8787`)
+- `INTEGRATION_STORE_PATH` (default: `.ibmcloudvercel/installations.json`)
+
+Endpoints:
+
+- `GET /integration/health`
+- `POST /integration/install`
+- `POST /integration/update`
+- `POST /integration/uninstall`
+
+Install/update request example:
+
+```json
+{
+  "installation_id": "ins_123",
+  "access_token": "vercel_installation_token",
+  "team": { "id": "team_123", "slug": "acme" },
+  "project": { "id": "prj_123", "name": "my-app" }
+}
+```
+
+Uninstall request example:
+
+```json
+{
+  "installation_id": "ins_123"
+}
+```
+
 ## Configuration Reference
 
 See [ibmcloudvercel.example.yml](ibmcloudvercel.example.yml) for a complete configuration template with comments.
