@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
 authors = [
-    {name = "Connor Leung", email = "your.email@example.com"}
+    {name = "Connor Leung", email = "connorleung.dev@gmail.com"}
 ]
 keywords = ["vercel", "ibm-cloud", "code-engine", "deployment", "ci-cd"]
 classifiers = [
