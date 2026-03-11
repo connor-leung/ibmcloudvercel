@@ -269,12 +269,13 @@ def create_cos_uploader(
     if endpoint is None:
         endpoint = f"s3.{region}.cloud-object-storage.appdomain.cloud"
 
-    # Get COS service instance ID from environment or derive from region
-    # In production, this should be the COS service CRN
-    service_instance_id = os.getenv(
-        "IBM_COS_SERVICE_INSTANCE_ID",
-        f"crn:v1:bluemix:public:cloud-object-storage:global:a/:::",
-    )
+    # COS service instance ID (CRN) must be explicitly provided.
+    service_instance_id = os.getenv("IBM_COS_SERVICE_INSTANCE_ID")
+    if not service_instance_id:
+        raise ValueError(
+            "IBM_COS_SERVICE_INSTANCE_ID is required for Cloud Object Storage access. "
+            "Set it in your environment (for Vercel, add it in Project Settings)."
+        )
 
     return COSUploader(
         authenticator=authenticator,

@@ -166,8 +166,19 @@ def create_iam_authenticator_oidc(
         # Create and return a BearerTokenAuthenticator
         return BearerTokenAuthenticator(bearer_token=access_token)
 
+    except requests.exceptions.HTTPError as e:
+        response = e.response
+        status = response.status_code if response is not None else "unknown"
+        body = response.text if response is not None else str(e)
+        raise RuntimeError(
+            "Failed to exchange OIDC token with IBM IAM token endpoint. "
+            f"HTTP {status}: {body}"
+        ) from e
     except requests.exceptions.RequestException as e:
-        raise RuntimeError(f"Failed to exchange OIDC token with IBM IAM: {str(e)}") from e
+        raise RuntimeError(
+            "Failed to exchange OIDC token with IBM IAM token endpoint. "
+            f"Network/request error: {str(e)}"
+        ) from e
     except KeyError as e:
         raise RuntimeError(f"Invalid response from IBM IAM token endpoint: {str(e)}") from e
 
@@ -204,13 +215,18 @@ def get_authenticator(
         ...     oidc_token=os.getenv("VERCEL_OIDC_TOKEN")
         ... )
     """
-    # Try OIDC authentication first (if token is available)
+    # Try OIDC authentication first (if token and profile are available)
     if oidc_token is None:
         oidc_token = os.getenv("VERCEL_OIDC_TOKEN")
 
     if oidc_token and trusted_profile_id:
         print("  Using OIDC authentication (Vercel → IBM Trusted Profile)")
         return create_iam_authenticator_oidc(oidc_token, trusted_profile_id)
+    if trusted_profile_id and not oidc_token:
+        print(
+            "  Trusted Profile configured but VERCEL_OIDC_TOKEN is not set; "
+            "falling back to API key authentication."
+        )
 
     # Fallback to API key authentication
     if api_key is None:
