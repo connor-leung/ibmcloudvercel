@@ -12,6 +12,15 @@ VERCEL_API_BASE = "https://api.vercel.com"
 CHECK_NAME = "ibm-cloud-vercel"
 
 
+def _should_skip_checks_for_deployment(deployment_id: str) -> bool:
+    """Return True for local placeholder deployment IDs used in local runs."""
+    normalized = deployment_id.strip().lower()
+    if not normalized:
+        return True
+
+    return normalized in {"local", "test-local", "test", "dev-local"}
+
+
 def _resolve_checks_token(
     token: Optional[str] = None,
     installation_token: Optional[str] = None,
@@ -39,6 +48,10 @@ def _post_check_update(
     team_id: Optional[str] = None,
 ) -> None:
     """Send a check update to the Vercel API."""
+    if _should_skip_checks_for_deployment(deployment_id):
+        print(f"  i  Skipping Vercel checks for local deployment ID '{deployment_id}'.")
+        return
+
     url = f"{VERCEL_API_BASE}/v1/deployments/{deployment_id}/checks"
     resolved_team_id = _resolve_team_id(team_id)
     if resolved_team_id:
@@ -66,6 +79,10 @@ def start_deployment_check(
     """Create an in-progress deployment check in Vercel."""
     if not deployment_id:
         print("  ⚠️  Missing Vercel deployment ID; skipping check start.")
+        return
+
+    if _should_skip_checks_for_deployment(deployment_id):
+        print(f"  i  Skipping Vercel checks for local deployment ID '{deployment_id}'.")
         return
 
     resolved_token = _resolve_checks_token(token, installation_token)
@@ -111,6 +128,10 @@ def complete_deployment_check(
     """Complete the deployment check with a final status."""
     if not deployment_id:
         print("  ⚠️  Missing Vercel deployment ID; skipping check completion.")
+        return
+
+    if _should_skip_checks_for_deployment(deployment_id):
+        print(f"  i  Skipping Vercel checks for local deployment ID '{deployment_id}'.")
         return
 
     resolved_token = _resolve_checks_token(token, installation_token)

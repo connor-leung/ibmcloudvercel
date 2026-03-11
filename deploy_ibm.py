@@ -55,6 +55,21 @@ def _is_dry_run_enabled() -> bool:
     return _is_truthy(os.getenv("IBM_CLOUD_VERCEL_DRY_RUN"))
 
 
+def _get_int_env(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None or raw.strip() == "":
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        print(f"  ⚠️  Invalid {name}='{raw}', using default {default}.")
+        return default
+    if value <= 0:
+        print(f"  ⚠️  Invalid {name}='{raw}', using default {default}.")
+        return default
+    return value
+
+
 def _validate_runtime_requirements(*, dry_run: bool = False) -> None:
     """Validate required config and environment values before cloud operations."""
     global _config
@@ -287,6 +302,9 @@ def main() -> int:
                 project_id=_config.ibm_cloud.project_id,
                 app_name=app_name,
                 payload=app_payload,
+                poll_interval=_get_int_env("IBM_CODE_ENGINE_POLL_INTERVAL", 5),
+                poll_timeout=_get_int_env("IBM_CODE_ENGINE_POLL_TIMEOUT", 600),
+                poll_request_timeout=_get_int_env("IBM_CODE_ENGINE_POLL_REQUEST_TIMEOUT", 10),
             )
         except CodeEngineError:
             raise

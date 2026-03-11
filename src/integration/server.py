@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
+import subprocess
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -55,6 +57,41 @@ def _normalize_scope(payload: dict[str, Any]) -> dict[str, Any]:
         "project_id": payload.get("project_id") or project.get("id"),
         "project_name": payload.get("project_name") or project.get("name"),
     }
+
+
+def _run_uninstall_cleanup(record: dict[str, Any] | None) -> dict[str, Any]:
+    """Run optional best-effort cleanup command after uninstall."""
+    command = os.getenv("INTEGRATION_UNINSTALL_CLEANUP_COMMAND", "").strip()
+    if not command:
+        return {"status": "skipped", "reason": "cleanup_command_not_configured"}
+
+    cmd = shlex.split(command)
+    if not cmd:
+        return {"status": "skipped", "reason": "cleanup_command_invalid"}
+
+    env = os.environ.copy()
+    if record and isinstance(record.get("installation_id"), str):
+        env["VERCEL_INTEGRATION_INSTALLATION_ID"] = record["installation_id"]
+    if record and isinstance(record.get("team_id"), str):
+        env["VERCEL_TEAM_ID"] = record["team_id"]
+    if record and isinstance(record.get("project_id"), str):
+        env["VERCEL_PROJECT_ID"] = record["project_id"]
+    if record and isinstance(record.get("project_name"), str):
+        env["VERCEL_PROJECT_NAME"] = record["project_name"]
+
+    try:
+        result = subprocess.run(cmd, env=env, check=False)
+    except Exception as exc:
+        return {"status": "failed", "error": str(exc)}
+
+    if result.returncode != 0:
+        return {
+            "status": "failed",
+            "exit_code": result.returncode,
+            "error": "cleanup command exited with non-zero status",
+        }
+
+    return {"status": "completed"}
 
 
 def _make_handler(
@@ -131,18 +168,25 @@ def _make_handler(
                 _safe_json(self, {"error": "Missing required field: installation_id"}, 400)
                 return
 
-            removed = store.delete_installation(str(installation_id))
+            installation_id_str = str(installation_id)
+            previous_record = store.get_installation(installation_id_str)
+            removed = store.delete_installation(installation_id_str)
             if not removed:
                 _safe_json(
                     self,
-                    {"status": "not_found", "installation_id": str(installation_id)},
+                    {"status": "not_found", "installation_id": installation_id_str},
                     404,
                 )
                 return
 
+            cleanup = _run_uninstall_cleanup(previous_record)
             _safe_json(
                 self,
-                {"status": "uninstalled", "installation_id": str(installation_id)},
+                {
+                    "status": "uninstalled",
+                    "installation_id": installation_id_str,
+                    "cleanup": cleanup,
+                },
                 200,
             )
 

@@ -1,0 +1,67 @@
+{
+  "name": "IBM Cloud Code Engine Deployments",
+  "slug": "ibm-cloud-vercel",
+  "description": "Deploy Vercel projects to IBM Cloud Code Engine and report status via Vercel Checks.",
+  "homepage": "https://github.com/your-org/ibmcloudvercel",
+  "support": "https://github.com/your-org/ibmcloudvercel/issues",
+  "categories": [
+    "deployment",
+    "monitoring"
+  ],
+  "settings": [
+    {
+      "key": "INTEGRATION_BASE_URL",
+      "description": "Public base URL of the integration backend, e.g. https://integration.example.com",
+      "required": true
+    },
+    {
+      "key": "VERCEL_WEBHOOK_SECRET",
+      "description": "Shared secret used to verify x-vercel-signature on webhook requests.",
+      "required": true,
+      "encrypted": true
+    },
+    {
+      "key": "IBM_CLOUD_API_KEY",
+      "description": "Fallback IBM API key (only used when OIDC token exchange is unavailable).",
+      "required": false,
+      "encrypted": true
+    },
+    {
+      "key": "IBM_COS_SERVICE_INSTANCE_ID",
+      "description": "COS service instance CRN required for source uploads.",
+      "required": true,
+      "encrypted": true
+    },
+    {
+      "key": "IBM_CODE_ENGINE_IMAGE_REFERENCE",
+      "description": "Container image reference for the Code Engine app.",
+      "required": true
+    }
+  ],
+  "scopes": {
+    "team": [
+      "read",
+      "projects:read",
+      "deployments:read",
+      "checks:write"
+    ],
+    "project": [
+      "read",
+      "checks:write"
+    ]
+  },
+  "events": [
+    "deployment.created",
+    "deployment.ready"
+  ],
+  "lifecycle": {
+    "install": "/integration/install",
+    "update": "/integration/update",
+    "uninstall": "/integration/uninstall",
+    "webhook": "/integration/webhook"
+  },
+  "notes": [
+    "Replace base URLs and support links with your production values.",
+    "Confirm scopes against the current Vercel Integration schema before publishing."
+  ]
+}
