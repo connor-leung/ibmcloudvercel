@@ -132,12 +132,13 @@ def create_iam_authenticator_oidc(
             "Set it in your ibmcloudvercel.yml configuration."
         )
 
-    # Exchange OIDC token for IBM IAM access token
+    # Exchange the Vercel-issued OIDC JWT for a short-lived IBM IAM bearer token.
+    # The grant type "cr-token" (compute resource token) is IBM's OAuth extension for
+    # workload identity — it lets a trusted external OIDC token stand in for an API key.
+    # "cr_token" is IBM's field name for the incoming compute-resource (OIDC) JWT.
     try:
-        # IBM Cloud IAM token exchange endpoint
         token_url = f"{iam_endpoint}/identity/token"
 
-        # Prepare the token exchange request
         headers = {
             "Content-Type": "application/x-www-form-urlencoded",
             "Accept": "application/json",

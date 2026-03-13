@@ -62,9 +62,10 @@ class COSUploader:
         self.bucket_name = bucket_name
         self.endpoint = endpoint
 
-        # Initialize IBM COS client based on authenticator type
+        # ibm_boto3 requires different init params depending on auth type because it handles
+        # token refresh internally for API keys but not for pre-exchanged tokens.
         if isinstance(authenticator, IAMAuthenticator):
-            # Use API key for IAM authenticator
+            # ibm_api_key_id lets ibm_boto3 manage IAM token refresh automatically.
             self.client = ibm_boto3.client(
                 "s3",
                 ibm_api_key_id=authenticator.token_manager.apikey,
@@ -73,8 +74,8 @@ class COSUploader:
                 endpoint_url=f"https://{endpoint}",
             )
         elif isinstance(authenticator, BearerTokenAuthenticator):
-            # Use bearer token for OIDC authenticator
-            # ibm_boto3 accepts ibm_auth_token for token-based authentication
+            # ibm_auth_token accepts a pre-exchanged bearer token from the OIDC flow;
+            # ibm_boto3 uses it as-is and does not attempt to refresh it.
             self.client = ibm_boto3.client(
                 "s3",
                 ibm_auth_token=authenticator.bearer_token,

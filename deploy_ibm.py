@@ -146,7 +146,7 @@ def main() -> int:
 
     try:
         # Step 1: Load and validate configuration
-        print("\n[1/4] Loading configuration...")
+        print("\n[1/5] Loading configuration...")
         try:
             _config = load_config()
         except FileNotFoundError as e:
@@ -206,7 +206,7 @@ def main() -> int:
             return 0
 
         # Step 2: Authenticate with IBM Cloud
-        print("\n[2/4] Authenticating with IBM Cloud...")
+        print("\n[2/5] Authenticating with IBM Cloud...")
         try:
             authenticator = auth.get_authenticator(
                 trusted_profile_id=_config.ibm_cloud.trusted_profile_id
@@ -225,7 +225,7 @@ def main() -> int:
         print("  ✓ Authentication successful")
 
         # Step 3: Notify Vercel that deployment checks started
-        print("\n[3/4] Notifying Vercel Checks API...")
+        print("\n[3/5] Notifying Vercel Checks API...")
         reporter.start_deployment_check(
             deployment_id=_config.vercel.deployment_id,
             token=_config.vercel.checks_token,
@@ -272,40 +272,10 @@ def main() -> int:
 
         print(f"  ✓ Source uploaded: {cos_uri}")
 
-        # Step 5: Deploy app to Code Engine and wait for ready status
+        # Step 5: Build source and deploy app to Code Engine
         print("\n[5/5] Deploying application to IBM Cloud Code Engine...")
-        app_name = _config.vercel.get_app_name()
-        image_reference = (
-            os.getenv("IBM_CODE_ENGINE_IMAGE_REFERENCE")
-            or os.getenv("IBM_CODE_ENGINE_IMAGE")
-        )
-        if not image_reference:
-            raise CodeEngineError(
-                "Code Engine image reference is not configured",
-                details=(
-                    "Set IBM_CODE_ENGINE_IMAGE_REFERENCE (or IBM_CODE_ENGINE_IMAGE) "
-                    "to the container image to deploy."
-                ),
-            )
-
         try:
-            app_payload = code_engine.build_code_engine_app_payload(
-                name=app_name,
-                image_reference=image_reference,
-                scaling=_config.scaling,
-                registry_secret=_config.ibm_cloud.registry_secret,
-            )
-
-            app_data, public_url = code_engine.deploy_application(
-                authenticator=authenticator,
-                region=_config.ibm_cloud.region,
-                project_id=_config.ibm_cloud.project_id,
-                app_name=app_name,
-                payload=app_payload,
-                poll_interval=_get_int_env("IBM_CODE_ENGINE_POLL_INTERVAL", 5),
-                poll_timeout=_get_int_env("IBM_CODE_ENGINE_POLL_TIMEOUT", 600),
-                poll_request_timeout=_get_int_env("IBM_CODE_ENGINE_POLL_REQUEST_TIMEOUT", 10),
-            )
+            public_url = code_engine.deploy(_config, authenticator, cos_uri)
         except CodeEngineError:
             raise
         except Exception as e:
@@ -317,7 +287,8 @@ def main() -> int:
                 ),
             ) from e
 
-        print(f"  ✓ Code Engine app ready: {app_data.get('name', app_name)}")
+        app_name = _config.vercel.get_app_name()
+        print(f"  ✓ Code Engine app ready: {app_name}")
         if public_url:
             print(f"  ✓ Public URL: {public_url}")
         else:

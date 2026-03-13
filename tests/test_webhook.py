@@ -40,7 +40,14 @@ def test_parse_webhook_event_extracts_fields() -> None:
         "type": "deployment.ready",
         "payload": {
             "installationId": "ins_1",
-            "deployment": {"id": "dpl_1", "projectId": "prj_1", "teamId": "team_1"},
+            "deployment": {
+                "id": "dpl_1",
+                "projectId": "prj_1",
+                "teamId": "team_1",
+                "name": "my-project",
+                "meta": {"githubCommitRef": "feature/x", "githubCommitSha": "abc123"},
+            },
+            "project": {"name": "my-project"},
         },
     }
     event = parse_webhook_event(payload)
@@ -49,6 +56,9 @@ def test_parse_webhook_event_extracts_fields() -> None:
     assert event.deployment_id == "dpl_1"
     assert event.project_id == "prj_1"
     assert event.team_id == "team_1"
+    assert event.git_commit_ref == "feature/x"
+    assert event.git_commit_sha == "abc123"
+    assert event.project_name == "my-project"
 
 
 def test_worker_processes_deployment_ready_with_installation_token(
@@ -78,7 +88,14 @@ def test_worker_processes_deployment_ready_with_installation_token(
             "type": "deployment.ready",
             "payload": {
                 "installationId": "ins_1",
-                "deployment": {"id": "dpl_1", "projectId": "prj_1", "teamId": "team_1"},
+                "deployment": {
+                    "id": "dpl_1",
+                    "projectId": "prj_1",
+                    "teamId": "team_1",
+                    "name": "my-project",
+                    "meta": {"githubCommitRef": "feature/x", "githubCommitSha": "abc123"},
+                },
+                "project": {"name": "my-project"},
             },
         }
     )
@@ -88,3 +105,20 @@ def test_worker_processes_deployment_ready_with_installation_token(
     assert isinstance(env, dict)
     assert env["VERCEL_DEPLOYMENT_ID"] == "dpl_1"
     assert env["VERCEL_INSTALLATION_TOKEN"] == "tok_123"
+    assert env["VERCEL_GIT_COMMIT_SHA"] == "abc123"
+    assert env["VERCEL_GIT_COMMIT_REF"] == "feature/x"
+    assert env["VERCEL_PROJECT_NAME"] == "my-project"
+
+
+def test_parse_webhook_event_git_fields_fallback() -> None:
+    payload = {
+        "type": "deployment.ready",
+        "payload": {
+            "installationId": "ins_1",
+            "deployment": {"id": "dpl_1", "projectId": "prj_1", "teamId": "team_1"},
+        },
+    }
+    event = parse_webhook_event(payload)
+    assert event.git_commit_ref is None
+    assert event.git_commit_sha is None
+    assert event.project_name is None

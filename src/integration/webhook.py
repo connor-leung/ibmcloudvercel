@@ -28,6 +28,9 @@ class WebhookEvent:
     project_id: Optional[str]
     team_id: Optional[str]
     installation_id: Optional[str]
+    git_commit_ref: Optional[str]
+    git_commit_sha: Optional[str]
+    project_name: Optional[str]
 
 
 def _normalize_signature(value: str) -> str:
@@ -117,6 +120,24 @@ def parse_webhook_event(payload: dict[str, Any]) -> WebhookEvent:
         payload.get("installation_id"),
     )
 
+    meta = deployment.get("meta") if isinstance(deployment.get("meta"), dict) else {}
+
+    git_commit_sha = _first_string(
+        meta.get("githubCommitSha"),
+        deployment.get("sha"),
+        payload_data.get("sha"),
+    )
+    git_commit_ref = _first_string(
+        meta.get("githubCommitRef"),
+        deployment.get("ref"),
+        payload_data.get("ref"),
+    )
+    project_name = _first_string(
+        project.get("name"),
+        deployment.get("name"),
+        payload_data.get("projectName"),
+    )
+
     return WebhookEvent(
         event_type=event_type,
         payload=payload,
@@ -124,6 +145,9 @@ def parse_webhook_event(payload: dict[str, Any]) -> WebhookEvent:
         project_id=project_id,
         team_id=team_id,
         installation_id=installation_id,
+        git_commit_ref=git_commit_ref,
+        git_commit_sha=git_commit_sha,
+        project_name=project_name,
     )
 
 
@@ -195,6 +219,12 @@ class DeploymentJobWorker:
                 env.setdefault("VERCEL_INSTALLATION_TOKEN", installation["access_token"])
                 env.setdefault("VERCEL_INTEGRATION_ACCESS_TOKEN", installation["access_token"])
                 env.setdefault("VERCEL_CHECKS_TOKEN", installation["access_token"])
+        if event.git_commit_sha:
+            env["VERCEL_GIT_COMMIT_SHA"] = event.git_commit_sha
+        if event.git_commit_ref:
+            env["VERCEL_GIT_COMMIT_REF"] = event.git_commit_ref
+        if event.project_name:
+            env["VERCEL_PROJECT_NAME"] = event.project_name
 
         print(
             "[integration] processing deployment.ready asynchronously "

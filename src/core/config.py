@@ -113,8 +113,12 @@ class VercelConfig:
         )
 
     def get_app_name(self) -> str:
-        """Generate a Code Engine app name based on the git branch."""
-        # Sanitize branch name for Code Engine (lowercase, alphanumeric + hyphens)
+        """Generate a Code Engine app name based on the git branch.
+
+        Code Engine app names must be valid RFC 1123 DNS labels: lowercase alphanumeric
+        and hyphens only, max 63 chars, must start with a letter. Git branch names like
+        "feature/my-branch" or "dependabot/npm_and_yarn/lodash" would be rejected as-is.
+        """
         raw_ref = self.git_commit_ref or "main"
         sanitized_ref = raw_ref.lower().replace("/", "-").replace("_", "-")
         sanitized_ref = re.sub(r"[^a-z0-9-]", "-", sanitized_ref)
@@ -123,11 +127,11 @@ class VercelConfig:
         if not sanitized_ref:
             sanitized_ref = "app"
 
-        # Ensure it starts with a letter
+        # DNS labels must start with a letter, not a digit or hyphen.
         if not sanitized_ref[0].isalpha():
             sanitized_ref = f"app-{sanitized_ref}"
 
-        return f"{self.project_name}-{sanitized_ref}"[:63]  # Code Engine name limit
+        return f"{self.project_name}-{sanitized_ref}"[:63]  # RFC 1123 max label length
 
 
 @dataclass
