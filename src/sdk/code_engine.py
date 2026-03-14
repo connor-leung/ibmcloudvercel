@@ -532,6 +532,77 @@ def create_or_update_app(
     return _extract_public_url(result)
 
 
+def list_apps(
+    client: CodeEngineV2,
+    project_id: str,
+    prefix: str = "",
+) -> list[dict[str, Any]]:
+    """
+    List Code Engine apps in a project, optionally filtered by name prefix.
+
+    Args:
+        client: Configured CodeEngineV2 SDK client
+        project_id: Code Engine project ID
+        prefix: Only return apps whose names start with this string
+
+    Returns:
+        List of app dicts from the Code Engine API
+
+    Raises:
+        CodeEngineError: If the API call fails
+    """
+    apps: list[dict[str, Any]] = []
+    start: Optional[str] = None
+
+    while True:
+        try:
+            kwargs: dict[str, Any] = {"project_id": project_id, "limit": 100}
+            if start:
+                kwargs["start"] = start
+            response = client.list_apps(**kwargs).get_result()
+        except ApiException as exc:
+            raise CodeEngineError("Failed to list Code Engine apps", details=str(exc)) from exc
+
+        for app in response.get("apps", []):
+            if not prefix or app.get("name", "").startswith(prefix):
+                apps.append(app)
+
+        next_page = response.get("next")
+        if not next_page:
+            break
+        start = next_page.get("start")
+        if not start:
+            break
+
+    return apps
+
+
+def delete_app(
+    client: CodeEngineV2,
+    project_id: str,
+    app_name: str,
+) -> None:
+    """
+    Delete a Code Engine app by name.
+
+    Args:
+        client: Configured CodeEngineV2 SDK client
+        project_id: Code Engine project ID
+        app_name: Name of the app to delete
+
+    Raises:
+        CodeEngineError: If the API call fails (404 is silently ignored)
+    """
+    try:
+        client.delete_app(project_id=project_id, name=app_name)
+        print(f"  ✓ Deleted app: {app_name}")
+    except ApiException as exc:
+        if exc.code == 404:
+            print(f"  ⚠️  App not found (already deleted?): {app_name}")
+        else:
+            raise CodeEngineError("Failed to delete Code Engine app", details=str(exc)) from exc
+
+
 def deploy(
     config: "DeploymentConfig",
     authenticator: Union[IAMAuthenticator, BearerTokenAuthenticator],

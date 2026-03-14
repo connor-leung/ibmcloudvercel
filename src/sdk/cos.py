@@ -2,7 +2,7 @@
 
 import os
 import zipfile
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from fnmatch import fnmatch
 from pathlib import Path
 from typing import Optional, Union
@@ -210,6 +210,76 @@ class COSUploader:
             print(f"Deleted object from COS: {object_name}")
         except Exception as e:
             print(f"Warning: Failed to delete object from COS: {str(e)}")
+
+    def list_deployment_objects(
+        self,
+        prefix: str = "deployments/",
+    ) -> list[dict]:
+        """
+        List COS objects under the given prefix.
+
+        Args:
+            prefix: Object key prefix to filter by (default: "deployments/")
+
+        Returns:
+            List of object dicts with keys: Key, LastModified, Size
+        """
+        objects: list[dict] = []
+        continuation_token: Optional[str] = None
+
+        while True:
+            kwargs: dict = {"Bucket": self.bucket_name, "Prefix": prefix}
+            if continuation_token:
+                kwargs["ContinuationToken"] = continuation_token
+
+            try:
+                response = self.client.list_objects_v2(**kwargs)
+            except Exception as exc:
+                raise RuntimeError(f"Failed to list COS objects: {exc}") from exc
+
+            for obj in response.get("Contents", []):
+                objects.append({
+                    "Key": obj["Key"],
+                    "LastModified": obj["LastModified"],
+                    "Size": obj["Size"],
+                })
+
+            if response.get("IsTruncated"):
+                continuation_token = response.get("NextContinuationToken")
+            else:
+                break
+
+        return objects
+
+    def cleanup_old_artifacts(
+        self,
+        prefix: str = "deployments/",
+        max_age_hours: int = 24,
+    ) -> list[str]:
+        """
+        Delete COS objects under prefix that are older than max_age_hours.
+
+        Args:
+            prefix: Object key prefix to filter by
+            max_age_hours: Age threshold in hours; objects older than this are deleted
+
+        Returns:
+            List of deleted object keys
+        """
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
+        objects = self.list_deployment_objects(prefix=prefix)
+
+        deleted: list[str] = []
+        for obj in objects:
+            last_modified = obj["LastModified"]
+            # Ensure timezone-aware comparison
+            if last_modified.tzinfo is None:
+                last_modified = last_modified.replace(tzinfo=timezone.utc)
+            if last_modified < cutoff:
+                self.delete_file(obj["Key"])
+                deleted.append(obj["Key"])
+
+        return deleted
 
     def upload_source_code(
         self,
