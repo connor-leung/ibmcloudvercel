@@ -298,12 +298,19 @@ def deploy_application(
         app_data = poll_response.json()
         status = app_data.get("status")
         last_status = status
+        print(f"  App status: {status}")
 
         if status == "ready":
             return app_data, _extract_public_url(app_data)
 
         if status in {"failed", "error"}:
             details = app_data.get("status_details") or {}
+            reason = details.get("reason") if isinstance(details, dict) else None
+            print(f"  App failure reason: {reason} | details: {details}")
+            # no_revision_ready is transient during a rollout — keep polling
+            if reason == "no_revision_ready":
+                time.sleep(poll_interval)
+                continue
             raise CodeEngineError(
                 "Code Engine app failed to become ready",
                 details=str(details),

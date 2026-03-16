@@ -347,17 +347,18 @@ def main() -> int:
                     "No image reference set",
                     details="Set IBM_CODE_ENGINE_IMAGE_REFERENCE to the image to deploy.",
                 )
-            client = code_engine.get_ce_client(
-                authenticator, _config.ibm_cloud.region, _config.ibm_cloud.project_id
-            )
             app_payload = code_engine.build_code_engine_app_payload(
                 name=_config.vercel.get_app_name(),
                 image_reference=image_reference,
                 scaling=_config.scaling,
                 registry_secret=_config.ibm_cloud.registry_secret,
             )
-            public_url = code_engine.create_or_update_app(
-                client, _config.ibm_cloud.project_id, _config.vercel.get_app_name(), app_payload
+            _, public_url = code_engine.deploy_application(
+                authenticator=authenticator,
+                region=_config.ibm_cloud.region,
+                project_id=_config.ibm_cloud.project_id,
+                app_name=_config.vercel.get_app_name(),
+                payload=app_payload,
             )
             if public_url:
                 print(f"  ✓ Public URL: {public_url}")
