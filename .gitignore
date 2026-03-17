@@ -41,7 +41,7 @@ htmlcov/
 .tox/
 
 # Configuration
-ibmcloudvercel.yml
+# ibmcloudvercel.yml is committed (uses only ${ENV_VAR} references, no secrets)
 .env
 .env.local
 
