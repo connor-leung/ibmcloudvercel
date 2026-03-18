@@ -22,19 +22,23 @@
     },
     {
       "key": "IBM_CLOUD_API_KEY",
-      "description": "Fallback IBM API key (only used when OIDC token exchange is unavailable).",
-      "required": false,
-      "encrypted": true
-    },
-    {
-      "key": "IBM_COS_SERVICE_INSTANCE_ID",
-      "description": "COS service instance CRN required for source uploads.",
+      "description": "IBM Cloud API key for authenticating with IBM Cloud services.",
       "required": true,
       "encrypted": true
     },
     {
+      "key": "IBM_CODE_ENGINE_PROJECT_ID",
+      "description": "Code Engine project ID where the application will be deployed.",
+      "required": true
+    },
+    {
       "key": "IBM_CODE_ENGINE_IMAGE_REFERENCE",
-      "description": "Container image reference for the Code Engine app.",
+      "description": "Target container image reference (e.g. docker.io/user/app:latest).",
+      "required": true
+    },
+    {
+      "key": "IBM_REGISTRY_SECRET",
+      "description": "Code Engine registry secret name for pushing the built image.",
       "required": true
     }
   ],
@@ -51,8 +55,7 @@
     ]
   },
   "events": [
-    "deployment.created",
-    "deployment.ready"
+    "deployment.created"
   ],
   "lifecycle": {
     "install": "/integration/install",

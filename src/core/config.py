@@ -143,6 +143,27 @@ class DeploymentConfig:
     source_dir: str = "."
 
     @classmethod
+    def from_environment(cls) -> "DeploymentConfig":
+        """Build configuration from environment variables (integration / no-config-file mode)."""
+        region = os.getenv("IBM_CLOUD_REGION", "us-south")
+        project_id = os.getenv("IBM_CODE_ENGINE_PROJECT_ID", "")
+        if not project_id:
+            raise ValueError(
+                "IBM_CODE_ENGINE_PROJECT_ID environment variable is required "
+                "when no ibmcloudvercel.yml config file is present."
+            )
+        ibm_cloud = IBMCloudConfig(
+            region=region,
+            project_id=project_id,
+            registry_secret=os.getenv("IBM_REGISTRY_SECRET"),
+            git_source_secret=os.getenv("IBM_GIT_SOURCE_SECRET"),
+            trusted_profile_id=os.getenv("IBM_CLOUD_TRUSTED_PROFILE_ID"),
+        )
+        vercel = VercelConfig.from_environment()
+        source_dir = os.getenv("IBM_CODE_ENGINE_SOURCE_DIR", ".")
+        return cls(ibm_cloud=ibm_cloud, scaling=ScalingConfig(), vercel=vercel, source_dir=source_dir)
+
+    @classmethod
     def from_yaml(cls, config_path: str = "ibmcloudvercel.yml") -> "DeploymentConfig":
         """
         Load and validate configuration from YAML file.
@@ -231,4 +252,7 @@ def load_config(config_path: str = "ibmcloudvercel.yml") -> DeploymentConfig:
     Returns:
         DeploymentConfig instance
     """
+    config_file = Path(config_path)
+    if not config_file.exists():
+        return DeploymentConfig.from_environment()
     return DeploymentConfig.from_yaml(config_path)

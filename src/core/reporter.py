@@ -100,7 +100,7 @@ def start_deployment_check(
                 "output": {
                     "title": "Deploying to IBM Cloud",
                     "summary": summary
-                    or "Uploading build artifacts to IBM Cloud Object Storage.",
+                    or "Submitting Code Engine build run from GitHub source.",
                 },
             }
         ]

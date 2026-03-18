@@ -15,7 +15,7 @@ from typing import Any, Optional
 from .store import InstallationStore
 
 
-SUPPORTED_WEBHOOK_EVENTS = {"deployment.created", "deployment.ready"}
+SUPPORTED_WEBHOOK_EVENTS = {"deployment.created"}
 
 
 @dataclass(frozen=True)
@@ -30,6 +30,8 @@ class WebhookEvent:
     installation_id: Optional[str]
     git_commit_ref: Optional[str]
     git_commit_sha: Optional[str]
+    git_repo_owner: Optional[str]
+    git_repo_slug: Optional[str]
     project_name: Optional[str]
 
 
@@ -132,6 +134,13 @@ def parse_webhook_event(payload: dict[str, Any]) -> WebhookEvent:
         deployment.get("ref"),
         payload_data.get("ref"),
     )
+    git_repo_owner = _first_string(
+        meta.get("githubCommitOrg"),
+        meta.get("githubOrg"),
+    )
+    git_repo_slug = _first_string(
+        meta.get("githubRepo"),
+    )
     project_name = _first_string(
         project.get("name"),
         deployment.get("name"),
@@ -147,6 +156,8 @@ def parse_webhook_event(payload: dict[str, Any]) -> WebhookEvent:
         installation_id=installation_id,
         git_commit_ref=git_commit_ref,
         git_commit_sha=git_commit_sha,
+        git_repo_owner=git_repo_owner,
+        git_repo_slug=git_repo_slug,
         project_name=project_name,
     )
 
@@ -184,25 +195,20 @@ class DeploymentJobWorker:
                 self._queue.task_done()
 
     def _process(self, event: WebhookEvent) -> None:
-        if event.event_type == "deployment.created":
-            print(
-                "[integration] deployment.created received "
-                f"(deployment_id={event.deployment_id or 'unknown'})"
-            )
-            return
-
-        if event.event_type != "deployment.ready":
+        if event.event_type != "deployment.created":
             print(f"[integration] ignoring unsupported webhook event: {event.event_type}")
             return
 
-        deploy_command = os.getenv("INTEGRATION_DEPLOY_COMMAND", "python deploy_ibm.py").strip()
+        deploy_command = os.getenv(
+            "INTEGRATION_DEPLOY_COMMAND", "python3 deploy_ibm.py --build"
+        ).strip()
         if not deploy_command:
-            print("[integration] deployment.ready received; no deploy command configured.")
+            print("[integration] deployment.created received; no deploy command configured.")
             return
 
         cmd = shlex.split(deploy_command)
         if not cmd:
-            print("[integration] deployment.ready received; invalid deploy command.")
+            print("[integration] deployment.created received; invalid deploy command.")
             return
 
         env = os.environ.copy()
@@ -223,11 +229,15 @@ class DeploymentJobWorker:
             env["VERCEL_GIT_COMMIT_SHA"] = event.git_commit_sha
         if event.git_commit_ref:
             env["VERCEL_GIT_COMMIT_REF"] = event.git_commit_ref
+        if event.git_repo_owner:
+            env["VERCEL_GIT_REPO_OWNER"] = event.git_repo_owner
+        if event.git_repo_slug:
+            env["VERCEL_GIT_REPO_SLUG"] = event.git_repo_slug
         if event.project_name:
             env["VERCEL_PROJECT_NAME"] = event.project_name
 
         print(
-            "[integration] processing deployment.ready asynchronously "
+            "[integration] processing deployment.created asynchronously "
             f"(deployment_id={event.deployment_id or 'unknown'})"
         )
         result = subprocess.run(cmd, env=env, check=False)

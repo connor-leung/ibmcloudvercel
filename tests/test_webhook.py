@@ -37,7 +37,7 @@ def test_verify_webhook_signature_invalid() -> None:
 
 def test_parse_webhook_event_extracts_fields() -> None:
     payload = {
-        "type": "deployment.ready",
+        "type": "deployment.created",
         "payload": {
             "installationId": "ins_1",
             "deployment": {
@@ -45,23 +45,30 @@ def test_parse_webhook_event_extracts_fields() -> None:
                 "projectId": "prj_1",
                 "teamId": "team_1",
                 "name": "my-project",
-                "meta": {"githubCommitRef": "feature/x", "githubCommitSha": "abc123"},
+                "meta": {
+                    "githubCommitRef": "feature/x",
+                    "githubCommitSha": "abc123",
+                    "githubCommitOrg": "my-org",
+                    "githubRepo": "my-repo",
+                },
             },
             "project": {"name": "my-project"},
         },
     }
     event = parse_webhook_event(payload)
-    assert event.event_type == "deployment.ready"
+    assert event.event_type == "deployment.created"
     assert event.installation_id == "ins_1"
     assert event.deployment_id == "dpl_1"
     assert event.project_id == "prj_1"
     assert event.team_id == "team_1"
     assert event.git_commit_ref == "feature/x"
     assert event.git_commit_sha == "abc123"
+    assert event.git_repo_owner == "my-org"
+    assert event.git_repo_slug == "my-repo"
     assert event.project_name == "my-project"
 
 
-def test_worker_processes_deployment_ready_with_installation_token(
+def test_worker_processes_deployment_created_with_installation_token(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -80,12 +87,12 @@ def test_worker_processes_deployment_ready_with_installation_token(
         captured["check"] = check
         return DummyResult()
 
-    monkeypatch.setenv("INTEGRATION_DEPLOY_COMMAND", "python deploy_ibm.py")
+    monkeypatch.setenv("INTEGRATION_DEPLOY_COMMAND", "python3 deploy_ibm.py --build")
     monkeypatch.setattr("integration.webhook.subprocess.run", fake_run)
 
     event = parse_webhook_event(
         {
-            "type": "deployment.ready",
+            "type": "deployment.created",
             "payload": {
                 "installationId": "ins_1",
                 "deployment": {
@@ -93,7 +100,12 @@ def test_worker_processes_deployment_ready_with_installation_token(
                     "projectId": "prj_1",
                     "teamId": "team_1",
                     "name": "my-project",
-                    "meta": {"githubCommitRef": "feature/x", "githubCommitSha": "abc123"},
+                    "meta": {
+                        "githubCommitRef": "feature/x",
+                        "githubCommitSha": "abc123",
+                        "githubCommitOrg": "my-org",
+                        "githubRepo": "my-repo",
+                    },
                 },
                 "project": {"name": "my-project"},
             },
@@ -107,12 +119,14 @@ def test_worker_processes_deployment_ready_with_installation_token(
     assert env["VERCEL_INSTALLATION_TOKEN"] == "tok_123"
     assert env["VERCEL_GIT_COMMIT_SHA"] == "abc123"
     assert env["VERCEL_GIT_COMMIT_REF"] == "feature/x"
+    assert env["VERCEL_GIT_REPO_OWNER"] == "my-org"
+    assert env["VERCEL_GIT_REPO_SLUG"] == "my-repo"
     assert env["VERCEL_PROJECT_NAME"] == "my-project"
 
 
 def test_parse_webhook_event_git_fields_fallback() -> None:
     payload = {
-        "type": "deployment.ready",
+        "type": "deployment.created",
         "payload": {
             "installationId": "ins_1",
             "deployment": {"id": "dpl_1", "projectId": "prj_1", "teamId": "team_1"},
@@ -121,4 +135,6 @@ def test_parse_webhook_event_git_fields_fallback() -> None:
     event = parse_webhook_event(payload)
     assert event.git_commit_ref is None
     assert event.git_commit_sha is None
+    assert event.git_repo_owner is None
+    assert event.git_repo_slug is None
     assert event.project_name is None
