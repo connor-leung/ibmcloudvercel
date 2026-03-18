@@ -1,5 +1,4 @@
 # IBM Cloud SDK Dependencies
-ibm-cos-sdk>=2.13.0
 ibm-code-engine-sdk>=3.6.0
 ibm-cloud-sdk-core>=3.16.0
 

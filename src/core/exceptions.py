@@ -32,13 +32,6 @@ class AuthenticationError(IBMCloudVercelError):
     error_type = "authentication"
 
 
-class COSUploadError(IBMCloudVercelError):
-    """Raised when Cloud Object Storage upload fails."""
-
-    exit_code = 30
-    error_type = "cos_upload"
-
-
 class CodeEngineError(IBMCloudVercelError):
     """Raised when Code Engine deployment fails."""
 
@@ -58,6 +51,5 @@ class VercelAPIError(IBMCloudVercelError):
 # 1   - Generic/unknown error
 # 10  - Configuration error (missing config, invalid values)
 # 20  - Authentication error (invalid API key, OIDC failure)
-# 30  - COS upload error (bucket not found, permission denied)
 # 40  - Code Engine error (deployment failed)
 # 50  - Vercel API error (checks API failed)

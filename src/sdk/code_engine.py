@@ -16,7 +16,7 @@ from core.config import DeploymentConfig, ScalingConfig
 from core.exceptions import CodeEngineError
 
 
-DEFAULT_SOURCE_TYPE = "cos"
+DEFAULT_SOURCE_TYPE = "git"
 DEFAULT_STRATEGY_TYPE = "dockerfile"
 DEFAULT_STRATEGY_SIZE = "medium"
 DEFAULT_CODE_ENGINE_VERSION = "2024-05-13"
@@ -71,22 +71,28 @@ def _extract_public_url(app_data: dict[str, Any]) -> Optional[str]:
 def build_code_engine_build_payload(
     *,
     name: str,
-    cos_uri: str,
+    source_url: str,
     output_image: str,
     output_secret: Optional[str] = None,
     source_type: str = DEFAULT_SOURCE_TYPE,
+    source_revision: Optional[str] = None,
+    source_context_dir: Optional[str] = None,
+    source_secret: Optional[str] = None,
     strategy_type: str = DEFAULT_STRATEGY_TYPE,
     strategy_size: str = DEFAULT_STRATEGY_SIZE,
 ) -> dict[str, Any]:
     """
-    Build the Code Engine build payload for a COS source archive.
+    Build the Code Engine build payload for a git or other source.
 
     Args:
         name: Build name in Code Engine
-        cos_uri: COS URI (e.g., cos://bucket/path/to/source.zip)
-        output_image: Target image reference (e.g., private.us.icr.io/ns/app:tag)
-        output_secret: Optional registry secret name
-        source_type: Source type for Code Engine (defaults to COS)
+        source_url: Source URL (e.g., https://github.com/owner/repo)
+        output_image: Target image reference (e.g., docker.io/user/app:tag)
+        output_secret: Optional registry secret name for pushing the image
+        source_type: Source type for Code Engine (defaults to git)
+        source_revision: Optional git commit SHA or branch
+        source_context_dir: Optional subdirectory in the repo containing the Dockerfile
+        source_secret: Optional secret for accessing a private source repo
         strategy_type: Build strategy (defaults to dockerfile)
         strategy_size: Build size (defaults to medium)
 
@@ -96,7 +102,7 @@ def build_code_engine_build_payload(
     payload: dict[str, Any] = {
         "name": name,
         "source_type": source_type,
-        "source_url": cos_uri,
+        "source_url": source_url,
         "strategy_type": strategy_type,
         "strategy_size": strategy_size,
         "output_image": output_image,
@@ -104,6 +110,12 @@ def build_code_engine_build_payload(
 
     if output_secret:
         payload["output_secret"] = output_secret
+    if source_revision:
+        payload["source_revision"] = source_revision
+    if source_context_dir:
+        payload["source_context_dir"] = source_context_dir
+    if source_secret:
+        payload["source_secret"] = source_secret
 
     return payload
 
@@ -150,12 +162,15 @@ def build_code_engine_payloads(
     *,
     app_name: str,
     build_name: str,
-    cos_uri: str,
+    source_url: str,
     image_reference: str,
     scaling: ScalingConfig,
     output_secret: Optional[str] = None,
     registry_secret: Optional[str] = None,
     source_type: str = DEFAULT_SOURCE_TYPE,
+    source_revision: Optional[str] = None,
+    source_context_dir: Optional[str] = None,
+    source_secret: Optional[str] = None,
     strategy_type: str = DEFAULT_STRATEGY_TYPE,
     strategy_size: str = DEFAULT_STRATEGY_SIZE,
 ) -> dict[str, dict[str, Any]]:
@@ -167,10 +182,13 @@ def build_code_engine_payloads(
     """
     build_payload = build_code_engine_build_payload(
         name=build_name,
-        cos_uri=cos_uri,
+        source_url=source_url,
         output_image=image_reference,
         output_secret=output_secret,
         source_type=source_type,
+        source_revision=source_revision,
+        source_context_dir=source_context_dir,
+        source_secret=source_secret,
         strategy_type=strategy_type,
         strategy_size=strategy_size,
     )
@@ -384,11 +402,12 @@ def create_build_run(
     }
 
     # Pass inline source spec fields when provided
-    for field in ("source_type", "source_url", "strategy_type", "strategy_size", "output_image"):
+    for field in (
+        "source_type", "source_url", "source_revision", "source_context_dir", "source_secret",
+        "strategy_type", "strategy_size", "output_image", "output_secret",
+    ):
         if field in build_payload:
             kwargs[field] = build_payload[field]
-    if "output_secret" in build_payload:
-        kwargs["output_secret"] = build_payload["output_secret"]
 
     try:
         result = client.create_build_run(**kwargs).get_result()
@@ -613,14 +632,13 @@ def delete_app(
 def deploy(
     config: "DeploymentConfig",
     authenticator: Union[IAMAuthenticator, BearerTokenAuthenticator],
-    cos_uri: str,
 ) -> Optional[str]:
     """
-    High-level orchestrator: build source from COS and deploy to Code Engine.
+    High-level orchestrator: build source from GitHub and deploy to Code Engine.
 
     Steps:
         1. Resolve image reference from environment
-        2. Submit a build run
+        2. Submit a build run (git source)
         3. Wait for the build to succeed
         4. Create or update the Code Engine app
         5. Return the public URL
@@ -628,7 +646,6 @@ def deploy(
     Args:
         config: Full deployment configuration (DeploymentConfig)
         authenticator: IBM Cloud IAM or Bearer token authenticator
-        cos_uri: COS URI pointing to the source archive (e.g., cos://bucket/src.zip)
 
     Returns:
         Public URL of the deployed app if available, otherwise None
@@ -638,7 +655,7 @@ def deploy(
             or the build run times out
 
     Example:
-        url = deploy(config, authenticator, "cos://my-bucket/source.zip")
+        url = deploy(config, authenticator)
     """
     image_reference = os.getenv("IBM_CODE_ENGINE_IMAGE_REFERENCE") or os.getenv(
         "IBM_CODE_ENGINE_IMAGE"
@@ -655,13 +672,23 @@ def deploy(
     app_name = config.vercel.get_app_name()
     build_name = f"{app_name}-build"
 
+    source_url = (
+        f"https://github.com/{config.vercel.git_repo_owner}/{config.vercel.git_repo_slug}"
+    )
+    source_revision = config.vercel.git_commit_sha or None
+    source_context_dir = config.source_dir if config.source_dir and config.source_dir != "." else None
+    source_secret = config.ibm_cloud.git_source_secret or None
+
     client = get_ce_client(authenticator, config.ibm_cloud.region, config.ibm_cloud.project_id)
 
     build_payload = build_code_engine_build_payload(
         name=build_name,
-        cos_uri=cos_uri,
+        source_url=source_url,
         output_image=image_reference,
         output_secret=config.ibm_cloud.registry_secret,
+        source_revision=source_revision,
+        source_context_dir=source_context_dir,
+        source_secret=source_secret,
     )
 
     build_run_name = create_build_run(client, config.ibm_cloud.project_id, build_payload)

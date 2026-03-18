@@ -17,14 +17,12 @@ def test_from_yaml_expands_env_and_loads_fields(tmp_path: Path, monkeypatch) -> 
     config_file = tmp_path / "ibmcloudvercel.yml"
     monkeypatch.setenv("REGION", "us-south")
     monkeypatch.setenv("PROJECT_ID", "project-123")
-    monkeypatch.setenv("BUCKET", "bucket-123")
     config_file.write_text(
         "\n".join(
             [
                 "ibm_cloud:",
                 "  region: \"${REGION}\"",
                 "  project_id: \"${PROJECT_ID}\"",
-                "  cos_bucket: \"${BUCKET}\"",
                 "scaling:",
                 "  min_scale: 1",
             ]
@@ -35,7 +33,6 @@ def test_from_yaml_expands_env_and_loads_fields(tmp_path: Path, monkeypatch) -> 
     config = DeploymentConfig.from_yaml(str(config_file))
     assert config.ibm_cloud.region == "us-south"
     assert config.ibm_cloud.project_id == "project-123"
-    assert config.ibm_cloud.cos_bucket == "bucket-123"
     assert config.scaling.min_scale == 1
 
 

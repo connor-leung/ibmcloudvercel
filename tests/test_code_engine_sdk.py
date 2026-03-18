@@ -56,8 +56,9 @@ def test_create_build_run_returns_name():
     client = _make_client_with_build_run("my-app-build-run-abc")
     payload = {
         "name": "my-build",
-        "source_type": "cos",
-        "source_url": "cos://bucket/src.zip",
+        "source_type": "git",
+        "source_url": "https://github.com/owner/repo",
+        "source_revision": "abc123",
         "strategy_type": "dockerfile",
         "strategy_size": "medium",
         "output_image": "private.icr.io/ns/app:tag",
@@ -211,7 +212,6 @@ def test_deploy_raises_without_image_reference(monkeypatch):
         ibm_cloud=IBMCloudConfig(
             region="us-south",
             project_id="proj-123",
-            cos_bucket="bucket",
         ),
         scaling=ScalingConfig(),
         vercel=VercelConfig(
@@ -219,11 +219,13 @@ def test_deploy_raises_without_image_reference(monkeypatch):
             git_commit_ref="main",
             deployment_id="dep-1",
             project_name="my-app",
+            git_repo_owner="owner",
+            git_repo_slug="repo",
         ),
     )
 
     with pytest.raises(CodeEngineError, match="Failed to resolve Code Engine image reference"):
-        deploy(config, MagicMock(), "cos://bucket/src.zip")
+        deploy(config, MagicMock())
 
 
 def test_deploy_orchestrates_full_flow(monkeypatch):
@@ -235,7 +237,6 @@ def test_deploy_orchestrates_full_flow(monkeypatch):
         ibm_cloud=IBMCloudConfig(
             region="us-south",
             project_id="proj-123",
-            cos_bucket="bucket",
         ),
         scaling=ScalingConfig(),
         vercel=VercelConfig(
@@ -243,6 +244,8 @@ def test_deploy_orchestrates_full_flow(monkeypatch):
             git_commit_ref="main",
             deployment_id="dep-1",
             project_name="my-app",
+            git_repo_owner="owner",
+            git_repo_slug="repo",
         ),
     )
 
@@ -255,7 +258,7 @@ def test_deploy_orchestrates_full_flow(monkeypatch):
             return_value="https://my-app.example.com",
         ) as mock_app,
     ):
-        url = deploy(config, MagicMock(), "cos://bucket/src.zip")
+        url = deploy(config, MagicMock())
 
     mock_get_client.assert_called_once()
     mock_build.assert_called_once()

@@ -9,7 +9,6 @@ def test_main_dry_run_skips_cloud_mutations(monkeypatch) -> None:
         ibm_cloud=IBMCloudConfig(
             region="us-south",
             project_id="project-1",
-            cos_bucket="bucket-1",
             trusted_profile_id=None,
         ),
         scaling=ScalingConfig(),
@@ -36,7 +35,6 @@ def test_main_dry_run_skips_cloud_mutations(monkeypatch) -> None:
     monkeypatch.setenv("IBM_CLOUD_VERCEL_DRY_RUN", "true")
     monkeypatch.setattr(deploy_ibm, "load_config", lambda: config)
     monkeypatch.setattr(deploy_ibm.auth, "get_authenticator", fail_cloud_call)
-    monkeypatch.setattr(deploy_ibm.cos, "create_cos_uploader", fail_cloud_call)
     monkeypatch.setattr(deploy_ibm.code_engine, "deploy_application", fail_cloud_call)
     monkeypatch.setattr(deploy_ibm.reporter, "start_deployment_check", fake_start)
     monkeypatch.setattr(deploy_ibm.reporter, "complete_deployment_check", fake_complete)

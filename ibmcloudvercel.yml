@@ -16,14 +16,11 @@ ibm_cloud:
   # Format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
   project_id: "${IBM_CODE_ENGINE_PROJECT_ID}"
 
-  # Cloud Object Storage bucket name for staging source code
-  cos_bucket: "${IBM_COS_BUCKET_NAME}"
+  # Container Registry secret name for pushing the built image
+  registry_secret: "${IBM_REGISTRY_SECRET}"
 
-  # Optional: Custom COS endpoint (auto-detected from region if not provided)
-  # cos_endpoint: "${IBM_COS_ENDPOINT}"
-
-  # Optional: Container Registry secret name (if using private registry)
-  # registry_secret: "${IBM_REGISTRY_SECRET}"
+  # Optional: Secret for accessing a private GitHub repository
+  # git_source_secret: "${IBM_GIT_SOURCE_SECRET}"
 
   # ===== AUTHENTICATION (Choose ONE method) =====
 
@@ -60,11 +57,9 @@ scaling:
   concurrency: 100
 
 # Deployment Options (OPTIONAL)
-# Directory containing source code to deploy (relative to repo root)
+# Subdirectory in the repo containing the Dockerfile (relative to repo root)
+# Leave as "." to use the repo root
 source_dir: "."
-
-# Whether to delete uploaded artifacts from COS after deployment
-cleanup_artifacts: true
 
 # Environment Variables (OPTIONAL)
 # Note: Set sensitive values like IBM_CLOUD_API_KEY in Vercel Environment Variables

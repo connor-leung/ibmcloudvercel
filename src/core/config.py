@@ -73,16 +73,9 @@ class IBMCloudConfig:
 
     region: str
     project_id: str
-    cos_bucket: str
-    cos_endpoint: Optional[str] = None
     registry_secret: Optional[str] = None
+    git_source_secret: Optional[str] = None  # For private GitHub repos
     trusted_profile_id: Optional[str] = None  # For OIDC authentication
-
-    def __post_init__(self) -> None:
-        """Auto-detect COS endpoint if not provided."""
-        # Auto-detect COS endpoint if not provided
-        if not self.cos_endpoint:
-            self.cos_endpoint = f"s3.{self.region}.cloud-object-storage.appdomain.cloud"
 
 
 @dataclass
@@ -94,6 +87,8 @@ class VercelConfig:
     deployment_id: str
     project_name: str
     checks_token: Optional[str] = None
+    git_repo_owner: str = ""
+    git_repo_slug: str = ""
 
     @classmethod
     def from_environment(cls) -> "VercelConfig":
@@ -103,6 +98,8 @@ class VercelConfig:
         deployment_id = os.getenv("VERCEL_DEPLOYMENT_ID", "local")
         project_name = os.getenv("VERCEL_PROJECT_NAME", "app")
         checks_token = os.getenv("VERCEL_CHECKS_TOKEN")
+        git_repo_owner = os.getenv("VERCEL_GIT_REPO_OWNER", "")
+        git_repo_slug = os.getenv("VERCEL_GIT_REPO_SLUG", "")
 
         return cls(
             git_commit_sha=git_commit_sha,
@@ -110,6 +107,8 @@ class VercelConfig:
             deployment_id=deployment_id,
             project_name=project_name,
             checks_token=checks_token,
+            git_repo_owner=git_repo_owner,
+            git_repo_slug=git_repo_slug,
         )
 
     def get_app_name(self) -> str:
@@ -142,7 +141,6 @@ class DeploymentConfig:
     scaling: ScalingConfig
     vercel: VercelConfig
     source_dir: str = "."
-    cleanup_artifacts: bool = True
 
     @classmethod
     def from_yaml(cls, config_path: str = "ibmcloudvercel.yml") -> "DeploymentConfig":
@@ -182,7 +180,7 @@ class DeploymentConfig:
 
         # Parse IBM Cloud config
         ibm_config_data = data["ibm_cloud"]
-        required_fields = ["region", "project_id", "cos_bucket"]
+        required_fields = ["region", "project_id"]
         missing_fields = [f for f in required_fields if f not in ibm_config_data]
 
         if missing_fields:
@@ -193,9 +191,8 @@ class DeploymentConfig:
         ibm_cloud = IBMCloudConfig(
             region=ibm_config_data["region"],
             project_id=ibm_config_data["project_id"],
-            cos_bucket=ibm_config_data["cos_bucket"],
-            cos_endpoint=ibm_config_data.get("cos_endpoint"),
             registry_secret=ibm_config_data.get("registry_secret"),
+            git_source_secret=ibm_config_data.get("git_source_secret"),
             trusted_profile_id=ibm_config_data.get("trusted_profile_id"),
         )
 
@@ -215,14 +212,12 @@ class DeploymentConfig:
 
         # Parse deployment options
         source_dir = data.get("source_dir", ".")
-        cleanup_artifacts = data.get("cleanup_artifacts", True)
 
         return cls(
             ibm_cloud=ibm_cloud,
             scaling=scaling,
             vercel=vercel,
             source_dir=source_dir,
-            cleanup_artifacts=cleanup_artifacts,
         )
 
 

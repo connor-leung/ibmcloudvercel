@@ -27,15 +27,20 @@ def test_build_payload_for_app() -> None:
     assert payload["registry_secret"] == "reg-secret"
 
 
-def test_build_payload_for_cos_build() -> None:
+def test_build_payload_for_git_build() -> None:
     payload = build_code_engine_build_payload(
         name="my-build",
-        cos_uri="cos://bucket/source.zip",
-        output_image="private.icr.io/ns/app:1",
+        source_url="https://github.com/owner/repo",
+        output_image="docker.io/user/app:1",
         output_secret="push-secret",
+        source_revision="abc123",
+        source_context_dir="welcome-image",
     )
 
     assert payload["name"] == "my-build"
-    assert payload["source_url"] == "cos://bucket/source.zip"
-    assert payload["output_image"] == "private.icr.io/ns/app:1"
+    assert payload["source_type"] == "git"
+    assert payload["source_url"] == "https://github.com/owner/repo"
+    assert payload["output_image"] == "docker.io/user/app:1"
     assert payload["output_secret"] == "push-secret"
+    assert payload["source_revision"] == "abc123"
+    assert payload["source_context_dir"] == "welcome-image"

@@ -10,7 +10,6 @@ Exit Codes:
     1   - Generic/unknown error
     10  - Configuration error
     20  - Authentication error
-    30  - COS upload error
     40  - Code Engine error
     50  - Vercel API error
     130 - Cancelled by user (SIGINT)
@@ -35,10 +34,9 @@ from core.exceptions import (
     IBMCloudVercelError,
     ConfigurationError,
     AuthenticationError,
-    COSUploadError,
     CodeEngineError,
 )
-from sdk import auth, cos, code_engine
+from sdk import auth, code_engine
 
 
 # Global config reference for error reporting
@@ -70,7 +68,7 @@ def _get_int_env(name: str, default: int) -> int:
     return value
 
 
-def _validate_runtime_requirements(*, dry_run: bool = False, direct_image: bool = False) -> None:
+def _validate_runtime_requirements(*, dry_run: bool = False) -> None:
     """Validate required config and environment values before cloud operations."""
     global _config
     if _config is None:
@@ -79,8 +77,6 @@ def _validate_runtime_requirements(*, dry_run: bool = False, direct_image: bool 
     missing_config: list[str] = []
     if not _config.ibm_cloud.project_id:
         missing_config.append("ibm_cloud.project_id")
-    if not direct_image and not _config.ibm_cloud.cos_bucket:
-        missing_config.append("ibm_cloud.cos_bucket")
 
     if missing_config:
         raise ConfigurationError(
@@ -99,15 +95,6 @@ def _validate_runtime_requirements(*, dry_run: bool = False, direct_image: bool 
             details=(
                 "Set VERCEL_OIDC_TOKEN and ibm_cloud.trusted_profile_id for OIDC, "
                 "or set IBM_CLOUD_API_KEY as fallback."
-            ),
-        )
-
-    if not direct_image and not os.getenv("IBM_COS_SERVICE_INSTANCE_ID"):
-        raise ConfigurationError(
-            "Missing IBM Cloud Object Storage service instance ID",
-            details=(
-                "Set IBM_COS_SERVICE_INSTANCE_ID (COS CRN). "
-                "This is required for COS upload operations."
             ),
         )
 
@@ -132,7 +119,7 @@ def _report_failure(error: Exception) -> None:
 
 def _run_cleanup() -> int:
     """
-    Cleanup mode: list preview Code Engine apps and delete stale COS artifacts.
+    Cleanup mode: list preview Code Engine apps.
 
     Returns:
         Exit code (0 for success, non-zero for failure)
@@ -144,7 +131,7 @@ def _run_cleanup() -> int:
     print("=" * 70)
 
     try:
-        print("\n[1/3] Loading configuration...")
+        print("\n[1/2] Loading configuration...")
         try:
             _config = load_config()
         except FileNotFoundError as e:
@@ -157,9 +144,8 @@ def _run_cleanup() -> int:
 
         print(f"  Region: {_config.ibm_cloud.region}")
         print(f"  Project ID: {_config.ibm_cloud.project_id}")
-        print(f"  COS Bucket: {_config.ibm_cloud.cos_bucket}")
 
-        print("\n[2/3] Authenticating with IBM Cloud...")
+        print("\n[2/2] Authenticating with IBM Cloud...")
         try:
             authenticator = auth.get_authenticator(
                 trusted_profile_id=_config.ibm_cloud.trusted_profile_id
@@ -167,8 +153,6 @@ def _run_cleanup() -> int:
         except Exception as e:
             raise AuthenticationError("Authentication failed", details=str(e)) from e
         print("  ✓ Authentication successful")
-
-        print("\n[3/3] Running cleanup...")
 
         # List preview Code Engine apps
         ce_client = code_engine.get_ce_client(
@@ -182,22 +166,6 @@ def _run_cleanup() -> int:
                 print(f"    - {app.get('name')} (status: {app.get('status')})")
         else:
             print("    (none found)")
-
-        # Delete stale COS artifacts
-        cos_uploader = cos.create_cos_uploader(
-            authenticator=authenticator,
-            region=_config.ibm_cloud.region,
-            bucket_name=_config.ibm_cloud.cos_bucket,
-            endpoint=_config.ibm_cloud.cos_endpoint,
-        )
-        print("\n  Deleting COS artifacts older than 24 hours under 'deployments/'...")
-        deleted = cos_uploader.cleanup_old_artifacts(prefix="deployments/", max_age_hours=24)
-        if deleted:
-            print(f"  Deleted {len(deleted)} stale artifact(s):")
-            for key in deleted:
-                print(f"    - {key}")
-        else:
-            print("  No stale artifacts found.")
 
         print("\n" + "=" * 70)
         print("✅ Cleanup complete.")
@@ -237,21 +205,27 @@ def main() -> int:
     import argparse
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--direct-image", action="store_true")
+    parser.add_argument("--build", action="store_true")
     parser.add_argument("--cleanup", action="store_true")
     args, _ = parser.parse_known_args()
     direct_image = args.direct_image
+    build_mode = args.build
 
     if args.cleanup:
         return _run_cleanup()
 
     global _config
-    zip_path = None  # Track for cleanup on failure
 
     print("=" * 70)
     print("IBMCloudVercel - Deploying to IBM Cloud Code Engine")
     print("=" * 70)
 
-    total_steps = "3" if direct_image else "5"
+    if direct_image:
+        total_steps = "3"
+    elif build_mode:
+        total_steps = "4"
+    else:
+        total_steps = "4"
 
     try:
         # Step 1: Load and validate configuration
@@ -269,16 +243,17 @@ def main() -> int:
 
         print(f"  Region: {_config.ibm_cloud.region}")
         print(f"  Project ID: {_config.ibm_cloud.project_id}")
-        print(f"  COS Bucket: {_config.ibm_cloud.cos_bucket}")
         print(f"  App Name: {_config.vercel.get_app_name()}")
         print(f"  Git Ref: {_config.vercel.git_commit_ref}")
         print(f"  Commit SHA: {_config.vercel.git_commit_sha[:8]}")
+        if build_mode:
+            print(f"  Mode: --build (git source)")
+        if direct_image:
+            print(f"  Mode: --direct-image")
         dry_run = _is_dry_run_enabled()
         if dry_run:
             print("  ⚙️  Dry-run mode enabled (IBM_CLOUD_VERCEL_DRY_RUN=true)")
-        if direct_image:
-            print("  ⚙️  Direct-image mode enabled (skipping COS upload and build)")
-        _validate_runtime_requirements(dry_run=dry_run, direct_image=direct_image)
+        _validate_runtime_requirements(dry_run=dry_run)
 
         if dry_run:
             print("\n[dry-run] Validating deployment plan without mutating cloud resources...")
@@ -295,10 +270,6 @@ def main() -> int:
                 registry_secret=_config.ibm_cloud.registry_secret,
             )
             print(f"  ✓ Generated Code Engine app payload for: {app_payload['name']}")
-            print(
-                "  ✓ Planned COS upload target: "
-                f"cos://{_config.ibm_cloud.cos_bucket}/deployments/{_config.vercel.deployment_id}/..."
-            )
             reporter.start_deployment_check(
                 deployment_id=_config.vercel.deployment_id,
                 token=_config.vercel.checks_token,
@@ -335,7 +306,7 @@ def main() -> int:
             ) from e
         print("  ✓ Authentication successful")
 
-        # Direct-image mode: skip COS upload and build, deploy pre-built image directly
+        # Direct-image mode: skip build, deploy pre-built image directly
         if direct_image:
             print(f"\n[3/{total_steps}] Deploying pre-built image to IBM Cloud Code Engine...")
             image_reference = (
@@ -378,57 +349,16 @@ def main() -> int:
             return 0
 
         # Step 3: Notify Vercel that deployment checks started
-        print("\n[3/5] Notifying Vercel Checks API...")
+        print(f"\n[3/{total_steps}] Notifying Vercel Checks API...")
         reporter.start_deployment_check(
             deployment_id=_config.vercel.deployment_id,
             token=_config.vercel.checks_token,
         )
 
-        # Step 4: Upload source code to COS
-        print("\n[4/5] Uploading source code to IBM Cloud Object Storage...")
+        # Step 4: Build from GitHub source and deploy app to Code Engine
+        print(f"\n[4/{total_steps}] Deploying application to IBM Cloud Code Engine...")
         try:
-            cos_uploader = cos.create_cos_uploader(
-                authenticator=authenticator,
-                region=_config.ibm_cloud.region,
-                bucket_name=_config.ibm_cloud.cos_bucket,
-                endpoint=_config.ibm_cloud.cos_endpoint,
-            )
-
-            cos_uri, zip_path = cos_uploader.upload_source_code(
-                source_dir=_config.source_dir,
-                deployment_id=_config.vercel.deployment_id,
-            )
-        except RuntimeError as e:
-            error_msg = str(e)
-            if "NoSuchBucket" in error_msg:
-                raise COSUploadError(
-                    "COS bucket not found",
-                    details=f"Bucket '{_config.ibm_cloud.cos_bucket}' does not exist. "
-                            "Create it in IBM Cloud Object Storage first."
-                ) from e
-            elif "AccessDenied" in error_msg:
-                raise COSUploadError(
-                    "COS access denied",
-                    details="Check that your API key has write permissions to the bucket."
-                ) from e
-            elif "IBM_COS_SERVICE_INSTANCE_ID is required" in error_msg:
-                raise COSUploadError(
-                    "COS configuration missing required service instance ID",
-                    details=error_msg,
-                ) from e
-            else:
-                raise COSUploadError("Failed to upload to COS", details=error_msg) from e
-        except ValueError as e:
-            raise COSUploadError("Invalid COS configuration", details=str(e)) from e
-        except Exception as e:
-            raise COSUploadError("COS upload failed", details=str(e)) from e
-
-        print(f"  ✓ Source uploaded: {cos_uri}")
-
-        # Step 5: Build source and deploy app to Code Engine
-        print("\n[5/5] Deploying application to IBM Cloud Code Engine...")
-        try:
-            public_url = code_engine.deploy(_config, authenticator, cos_uri)
+            public_url = code_engine.deploy(_config, authenticator)
         except CodeEngineError:
             raise
         except Exception as e:
@@ -462,11 +392,6 @@ def main() -> int:
             print(f"   URL: {public_url}")
         print("=" * 70)
 
-        # Cleanup (optional)
-        if _config.cleanup_artifacts and zip_path:
-            print(f"\nCleaning up local artifact: {zip_path}")
-            Path(zip_path).unlink(missing_ok=True)
-
         return 0
 
     except ConfigurationError as e:
@@ -481,20 +406,10 @@ def main() -> int:
         _report_failure(e)
         return e.exit_code
 
-    except COSUploadError as e:
-        print(f"\n❌ COS Upload Error (exit code {e.exit_code})", file=sys.stderr)
-        print(f"   {e}", file=sys.stderr)
-        _report_failure(e)
-        if zip_path:
-            Path(zip_path).unlink(missing_ok=True)
-        return e.exit_code
-
     except IBMCloudVercelError as e:
         print(f"\n❌ Deployment Error (exit code {e.exit_code})", file=sys.stderr)
         print(f"   {e}", file=sys.stderr)
         _report_failure(e)
-        if zip_path:
-            Path(zip_path).unlink(missing_ok=True)
         return e.exit_code
 
     except KeyboardInterrupt:
@@ -508,8 +423,6 @@ def main() -> int:
         import traceback
         traceback.print_exc()
         _report_failure(e)
-        if zip_path:
-            Path(zip_path).unlink(missing_ok=True)
         return 1
 
 
