@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ibmcloudvercel — Deploy from Vercel to IBM Cloud Code Engine</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0a;
+      --surface: #111;
+      --border: #222;
+      --text: #e8e8e8;
+      --muted: #888;
+      --accent: #be95ff; /* IBM purple */
+      --accent2: #33b1ff; /* IBM blue */
+      --code-bg: #161616;
+      --green: #42be65;
+    }
+
+    body {
+      font-family: 'IBM Plex Mono', 'Fira Code', 'Courier New', monospace;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    a { color: var(--accent2); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ── Layout ── */
+    .container { max-width: 860px; margin: 0 auto; padding: 0 24px; }
+
+    /* ── Header ── */
+    header {
+      border-bottom: 1px solid var(--border);
+      padding: 48px 0 40px;
+    }
+    .badge {
+      display: inline-block;
+      font-size: 11px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      border: 1px solid var(--accent);
+      border-radius: 3px;
+      padding: 2px 8px;
+      margin-bottom: 16px;
+    }
+    h1 {
+      font-size: clamp(28px, 5vw, 44px);
+      font-weight: 700;
+      letter-spacing: -.02em;
+      line-height: 1.15;
+      margin-bottom: 16px;
+    }
+    h1 span { color: var(--accent); }
+    .tagline {
+      font-size: 16px;
+      color: var(--muted);
+      max-width: 560px;
+    }
+    .cta-row {
+      display: flex;
+      gap: 12px;
+      margin-top: 28px;
+      flex-wrap: wrap;
+    }
+    .btn {
+      display: inline-block;
+      padding: 10px 20px;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity .15s;
+    }
+    .btn:hover { opacity: .8; text-decoration: none; }
+    .btn-primary { background: var(--accent); color: #000; }
+    .btn-secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
+
+    /* ── Flow diagram ── */
+    .flow {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      flex-wrap: wrap;
+      padding: 32px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .flow-step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      padding: 16px 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      min-width: 130px;
+      text-align: center;
+    }
+    .flow-step .icon { font-size: 24px; }
+    .flow-step .label { font-size: 12px; color: var(--muted); }
+    .flow-step .name { font-size: 14px; font-weight: 600; }
+    .flow-arrow {
+      font-size: 20px;
+      color: var(--muted);
+      padding: 0 8px;
+      flex-shrink: 0;
+    }
+
+    /* ── Sections ── */
+    section { padding: 48px 0; border-bottom: 1px solid var(--border); }
+    section:last-child { border-bottom: none; }
+    h2 {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 24px;
+      color: var(--text);
+    }
+    h2 .num {
+      color: var(--accent);
+      margin-right: 8px;
+    }
+    p { color: var(--muted); margin-bottom: 12px; }
+    p:last-child { margin-bottom: 0; }
+
+    /* ── Feature grid ── */
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin-top: 8px;
+    }
+    .feature {
+      padding: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+    .feature-icon { font-size: 20px; margin-bottom: 10px; }
+    .feature-title { font-size: 14px; font-weight: 700; margin-bottom: 6px; color: var(--text); }
+    .feature-desc { font-size: 13px; color: var(--muted); }
+
+    /* ── Code blocks ── */
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 20px;
+      overflow-x: auto;
+      font-size: 13px;
+      line-height: 1.7;
+      margin: 16px 0;
+    }
+    code { font-family: inherit; }
+    .c  { color: var(--muted); }      /* comment */
+    .k  { color: var(--accent); }     /* key / keyword */
+    .v  { color: var(--green); }      /* value / string */
+    .p  { color: var(--accent2); }    /* punctuation / env var */
+
+    /* ── Steps list ── */
+    .steps { counter-reset: step; list-style: none; display: flex; flex-direction: column; gap: 20px; }
+    .steps li {
+      counter-increment: step;
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+    .steps li::before {
+      content: counter(step);
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #000;
+      font-size: 13px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 2px;
+    }
+    .step-content { flex: 1; }
+    .step-title { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+    .step-desc { font-size: 13px; color: var(--muted); }
+
+    /* ── Auth cards ── */
+    .auth-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 8px; }
+    @media (max-width: 600px) { .auth-grid { grid-template-columns: 1fr; } }
+    .auth-card {
+      padding: 20px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+    }
+    .auth-card.recommended { border-color: var(--accent); }
+    .auth-card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .auth-card-title { font-size: 14px; font-weight: 700; }
+    .tag {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      padding: 2px 6px;
+      border-radius: 3px;
+      background: var(--accent);
+      color: #000;
+      font-weight: 700;
+    }
+    .auth-card-desc { font-size: 13px; color: var(--muted); }
+
+    /* ── Footer ── */
+    footer {
+      padding: 32px 0;
+      text-align: center;
+      font-size: 13px;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- Header -->
+  <header>
+    <div class="badge">Open Source</div>
+    <h1>ibmcloud<span>vercel</span></h1>
+    <p class="tagline">
+      A Vercel integration that automatically deploys your app to
+      IBM Cloud Code Engine every time Vercel creates a new deployment.
+    </p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://github.com/connorleung/ibmcloudvercel">View on GitHub</a>
+      <a class="btn btn-secondary" href="./setup">Documentation &rarr;</a>
+    </div>
+  </header>
+
+  <!-- Flow diagram -->
+  <div class="flow">
+    <div class="flow-step">
+      <div class="icon">&#x1F4E6;</div>
+      <div class="name">Git Push</div>
+      <div class="label">your code</div>
+    </div>
+    <div class="flow-arrow">&#x2192;</div>
+    <div class="flow-step">
+      <div class="icon">&#x25B2;</div>
+      <div class="name">Vercel</div>
+      <div class="label">deployment.created</div>
+    </div>
+    <div class="flow-arrow">&#x2192;</div>
+    <div class="flow-step">
+      <div class="icon">&#x1F517;</div>
+      <div class="name">Webhook</div>
+      <div class="label">ibmcloudvercel</div>
+    </div>
+    <div class="flow-arrow">&#x2192;</div>
+    <div class="flow-step">
+      <div class="icon">&#x2601;&#xFE0F;</div>
+      <div class="name">Code Engine</div>
+      <div class="label">IBM Cloud</div>
+    </div>
+  </div>
+
+  <!-- What it does -->
+  <section>
+    <h2>What it does</h2>
+    <p>
+      ibmcloudvercel acts as a bridge between Vercel and IBM Cloud.
+      It runs a small HTTP service that listens for Vercel webhook events.
+      When Vercel creates a new deployment, the integration triggers a build
+      and deploy job on IBM Cloud Code Engine — automatically, with no manual steps.
+    </p>
+    <div class="features">
+      <div class="feature">
+        <div class="feature-icon">&#x26A1;</div>
+        <div class="feature-title">Automatic deploys</div>
+        <div class="feature-desc">Every Vercel <code>deployment.created</code> event triggers a Code Engine build.</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">&#x1F510;</div>
+        <div class="feature-title">OIDC auth support</div>
+        <div class="feature-desc">Use IBM Trusted Profiles with Vercel's OIDC tokens — no static API keys needed.</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">&#x1F4C4;</div>
+        <div class="feature-title">YAML config</div>
+        <div class="feature-desc">One <code>ibmcloudvercel.yml</code> file controls region, scaling, CPU, memory, and more.</div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">&#x2195;&#xFE0F;</div>
+        <div class="feature-title">Scale to zero</div>
+        <div class="feature-desc">Code Engine scales down to zero when idle — you only pay for what you use.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Quick Start -->
+  <section id="quickstart">
+    <h2>Quick Start</h2>
+    <ol class="steps">
+      <li>
+        <div class="step-content">
+          <div class="step-title">Clone the repo &amp; install dependencies</div>
+          <pre><code>git clone https://github.com/connorleung/ibmcloudvercel
+cd ibmcloudvercel
+pip3 install -r requirements.txt</code></pre>
+        </div>
+      </li>
+      <li>
+        <div class="step-content">
+          <div class="step-title">Copy and edit the config file</div>
+          <pre><code>cp ibmcloudvercel.example.yml ibmcloudvercel.yml</code></pre>
+          <div class="step-desc">Fill in your IBM Cloud region, Code Engine project ID, and COS bucket name.</div>
+        </div>
+      </li>
+      <li>
+        <div class="step-content">
+          <div class="step-title">Set environment variables in Vercel</div>
+          <pre><code><span class="c"># Required</span>
+<span class="k">IBM_CODE_ENGINE_PROJECT_ID</span>=<span class="v">xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx</span>
+<span class="k">IBM_COS_BUCKET_NAME</span>=<span class="v">my-bucket</span>
+<span class="k">IBM_CLOUD_REGION</span>=<span class="v">us-south</span>
+
+<span class="c"># Choose one auth method (OIDC recommended)</span>
+<span class="k">IBM_TRUSTED_PROFILE_ID</span>=<span class="v">Profile-xxxx</span>   <span class="c"># OIDC</span>
+<span class="k">IBM_CLOUD_API_KEY</span>=<span class="v">your-api-key</span>        <span class="c"># fallback</span>
+
+<span class="c"># Webhook secret (from Vercel integration settings)</span>
+<span class="k">VERCEL_WEBHOOK_SECRET</span>=<span class="v">your-secret</span></code></pre>
+        </div>
+      </li>
+      <li>
+        <div class="step-content">
+          <div class="step-title">Deploy the integration service to Vercel</div>
+          <div class="step-desc">Push to your repo. Vercel will build and deploy the integration server. Configure the webhook URL in your Vercel integration settings to point to <code>/integration/webhook</code>.</div>
+        </div>
+      </li>
+      <li>
+        <div class="step-content">
+          <div class="step-title">Push code and watch it deploy</div>
+          <div class="step-desc">From now on, every push to your repo will automatically trigger a Code Engine build via the Vercel webhook.</div>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <!-- Config reference -->
+  <section>
+    <h2>ibmcloudvercel.yml</h2>
+    <p>Drop this file in your repo root. All values support <code>${'{'}ENV_VAR{'}'}</code> and <code>${'{'}ENV_VAR:-default{'}'}</code> syntax.</p>
+    <pre><code><span class="k">ibm_cloud</span>:
+  <span class="k">region</span>: <span class="p">"${IBM_CLOUD_REGION:-us-south}"</span>
+  <span class="k">project_id</span>: <span class="p">"${IBM_CODE_ENGINE_PROJECT_ID}"</span>
+  <span class="k">cos_bucket</span>: <span class="p">"${IBM_COS_BUCKET_NAME}"</span>
+
+  <span class="c"># OIDC auth (recommended)</span>
+  <span class="k">trusted_profile_id</span>: <span class="p">"${IBM_TRUSTED_PROFILE_ID}"</span>
+
+<span class="k">scaling</span>:
+  <span class="k">min_scale</span>: <span class="v">0</span>        <span class="c"># scale to zero when idle</span>
+  <span class="k">max_scale</span>: <span class="v">10</span>
+  <span class="k">cpu</span>: <span class="v">"0.25"</span>
+  <span class="k">memory</span>: <span class="v">"0.5G"</span>
+  <span class="k">port</span>: <span class="v">8080</span>
+  <span class="k">concurrency</span>: <span class="v">100</span>
+
+<span class="k">source_dir</span>: <span class="v">"."</span>
+<span class="k">cleanup_artifacts</span>: <span class="v">true</span></code></pre>
+  </section>
+
+  <!-- Auth -->
+  <section>
+    <h2>Authentication</h2>
+    <p>Two methods are supported. OIDC is recommended because it uses short-lived tokens with no static secrets to manage.</p>
+    <div class="auth-grid">
+      <div class="auth-card recommended">
+        <div class="auth-card-header">
+          <div class="auth-card-title">OIDC via Trusted Profile</div>
+          <div class="tag">Recommended</div>
+        </div>
+        <div class="auth-card-desc">
+          Set up an IBM Cloud Trusted Profile that trusts Vercel's OIDC issuer,
+          then set <code>IBM_TRUSTED_PROFILE_ID</code>. No static secrets, no rotation headaches.
+        </div>
+      </div>
+      <div class="auth-card">
+        <div class="auth-card-header">
+          <div class="auth-card-title">API Key</div>
+        </div>
+        <div class="auth-card-desc">
+          Set <code>IBM_CLOUD_API_KEY</code> in Vercel environment variables.
+          Used as a fallback when <code>trusted_profile_id</code> is not configured.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <p>ibmcloudvercel &mdash; MIT License &mdash; <a href="https://github.com/connorleung/ibmcloudvercel">github.com/connorleung/ibmcloudvercel</a></p>
+  </footer>
+
+</div>
+</body>
+</html>

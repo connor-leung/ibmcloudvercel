@@ -1,0 +1,23 @@
+title: ibmcloudvercel
+description: Deploy from Vercel to IBM Cloud Code Engine automatically.
+
+remote_theme: just-the-docs/just-the-docs
+
+url: https://connorleung.github.io
+baseurl: /ibmcloudvercel
+
+color_scheme: dark
+
+# Navigation
+nav_sort: order
+
+# Footer
+footer_content: "MIT License &mdash; <a href=\"https://github.com/connorleung/ibmcloudvercel\">GitHub</a>"
+
+# Exclude files from Jekyll build
+exclude:
+  - venv/
+  - src/
+  - "*.py"
+  - "*.yml"
+  - "!docs/_config.yml"
