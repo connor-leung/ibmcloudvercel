@@ -18,7 +18,7 @@ nav_order: 1
 ## 1. Clone the repo
 
 ```bash
-git clone https://github.com/connorleung/ibmcloudvercel
+git clone https://github.com/connor-leung/ibmcloudvercel
 cd ibmcloudvercel
 pip3 install -r requirements.txt
 ```

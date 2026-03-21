@@ -3,7 +3,7 @@ description: Deploy from Vercel to IBM Cloud Code Engine automatically.
 
 remote_theme: just-the-docs/just-the-docs
 
-url: https://connorleung.github.io
+url: https://connor-leung.github.io
 baseurl: /ibmcloudvercel
 
 color_scheme: dark
@@ -12,7 +12,7 @@ color_scheme: dark
 nav_sort: order
 
 # Footer
-footer_content: "MIT License &mdash; <a href=\"https://github.com/connorleung/ibmcloudvercel\">GitHub</a>"
+footer_content: "MIT License &mdash; <a href=\"https://github.com/connor-leung/ibmcloudvercel\">GitHub</a>"
 
 # Exclude files from Jekyll build
 exclude:
