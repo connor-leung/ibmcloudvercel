@@ -12,7 +12,7 @@ color_scheme: dark
 nav_sort: order
 
 # Footer
-footer_content: "MIT License &mdash; <a href=\"https://github.com/connor-leung/ibmcloudvercel\">GitHub</a>"
+footer_content: "MIT License &mdash; <a href=\"https://github.com/connor-leung/ibmcloudvercel\">GitHub</a> &mdash; <a href=\"/ibmcloudvercel/eula\">EULA</a> &mdash; <a href=\"/ibmcloudvercel/privacy\">Privacy Policy</a>"
 
 # Exclude files from Jekyll build
 exclude:
