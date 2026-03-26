@@ -13,14 +13,15 @@ By installing or using the IBM Cloud Code Engine Vercel Integration ("the Integr
 
 ## 2. License
 
-You are granted a non-exclusive, non-transferable license to use the Integration solely to automate deployments from Vercel to IBM Cloud Code Engine for your own projects.
+This project is released under the [MIT License](https://opensource.org/licenses/MIT). You are free to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Integration, subject to the conditions of the MIT License.
 
 ## 3. Restrictions
 
 You may not:
-- Redistribute or sublicense the Integration
+
 - Use the Integration for unlawful purposes
-- Attempt to reverse engineer or modify the Integration's backend service
+- Remove or obscure copyright or license notices included in the source
+
 
 ## 4. Data
 
@@ -40,4 +41,4 @@ This license terminates automatically if you violate any of its terms.
 
 ## 8. Contact
 
-For questions, contact: connorleung.dev@gmail.com
+For questions, contact: [connorleung.dev@gmail.com](mailto:connorleung.dev@gmail.com)
