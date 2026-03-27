@@ -9,7 +9,9 @@ import subprocess
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
+
+import requests
 
 from .store import InstallationStore
 from .webhook import (
@@ -18,6 +20,13 @@ from .webhook import (
     parse_webhook_event,
     verify_webhook_signature,
 )
+
+
+def _safe_redirect(handler: BaseHTTPRequestHandler, location: str) -> None:
+    handler.send_response(302)
+    handler.send_header("Location", location)
+    handler.send_header("Content-Length", "0")
+    handler.end_headers()
 
 
 def _safe_json(handler: BaseHTTPRequestHandler, payload: dict[str, Any], status: int) -> None:
@@ -111,6 +120,10 @@ def _make_handler(
                 _safe_json(self, {"status": "ok"}, 200)
                 return
 
+            if path == "/integration/install":
+                self._handle_oauth_callback()
+                return
+
             _safe_json(self, {"error": "Not Found"}, 404)
 
         def do_POST(self) -> None:
@@ -189,6 +202,62 @@ def _make_handler(
                 },
                 200,
             )
+
+        def _handle_oauth_callback(self) -> None:
+            qs = parse_qs(urlparse(self.path).query)
+
+            def first(key: str) -> str | None:
+                vals = qs.get(key)
+                return vals[0] if vals else None
+
+            code = first("code")
+            configuration_id = first("configurationId")
+            next_url = first("next")
+            team_id = first("teamId")
+
+            missing = [k for k, v in [("code", code), ("configurationId", configuration_id), ("next", next_url)] if not v]
+            if missing:
+                _safe_json(self, {"error": f"Missing required query params: {', '.join(missing)}"}, 400)
+                return
+
+            client_id = os.getenv("VERCEL_CLIENT_ID", "")
+            client_secret = os.getenv("VERCEL_CLIENT_SECRET", "")
+            redirect_uri = os.getenv("VERCEL_REDIRECT_URI", "")
+
+            try:
+                resp = requests.post(
+                    "https://api.vercel.com/v2/oauth/access_token",
+                    data={
+                        "client_id": client_id,
+                        "client_secret": client_secret,
+                        "code": code,
+                        "redirect_uri": redirect_uri,
+                    },
+                    timeout=10,
+                )
+            except Exception as exc:
+                _safe_json(self, {"error": f"Token exchange request failed: {exc}"}, 502)
+                return
+
+            if resp.status_code != 200:
+                _safe_json(self, {"error": "Token exchange failed", "upstream_status": resp.status_code, "detail": resp.text}, 502)
+                return
+
+            token_data = resp.json()
+            access_token = token_data.get("access_token")
+            if not access_token:
+                _safe_json(self, {"error": "No access_token in token exchange response"}, 502)
+                return
+
+            installation_id = token_data.get("installation_id") or configuration_id
+
+            store.upsert_installation(
+                installation_id=str(installation_id),
+                access_token=str(access_token),
+                team_id=str(team_id) if team_id else None,
+            )
+
+            _safe_redirect(self, next_url)
 
         def _handle_webhook(self) -> None:
             raw = _read_raw_body(self)
