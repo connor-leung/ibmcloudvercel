@@ -262,7 +262,7 @@ def _make_handler(
         def _handle_webhook(self) -> None:
             raw = _read_raw_body(self)
             signature = self.headers.get("x-vercel-signature")
-            secret = os.getenv("VERCEL_WEBHOOK_SECRET") or os.getenv("INTEGRATION_WEBHOOK_SECRET")
+            secret = os.getenv("VERCEL_WEBHOOK_SECRET") or os.getenv("INTEGRATION_WEBHOOK_SECRET") or os.getenv("VERCEL_CLIENT_SECRET")
 
             is_valid, error = verify_webhook_signature(
                 raw_body=raw,
