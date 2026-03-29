@@ -161,7 +161,7 @@ def create_iam_authenticator_oidc(
         if not access_token:
             raise RuntimeError("Failed to obtain access token from IBM IAM")
 
-        print(f"  ✓ OIDC token exchanged for IBM IAM access token")
+        print("  ✓ OIDC token exchanged for IBM IAM access token")
         print(f"    Token expires in: {token_data.get('expires_in', 'unknown')} seconds")
 
         # Create and return a BearerTokenAuthenticator
