@@ -74,7 +74,7 @@ jobs:
             -g Default
 
       - name: Log in to IBM Container Registry
-        run: ibmcloud cr login --client docker
+        run: echo "${{ secrets.IBM_CLOUD_API_KEY }}" | docker login us.icr.io -u iamapikey --password-stdin
 
       - name: Build Docker image
         run: |
