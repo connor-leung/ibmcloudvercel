@@ -1,0 +1,103 @@
+name: Test, Build, and Deploy to IBM Code Engine
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  REGISTRY: us.icr.io
+  CE_REGION: us-south
+
+jobs:
+  test:
+    name: Test (Python 3.12)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Lint (ruff)
+        run: ruff check src/
+
+      - name: Test with coverage
+        run: pytest --cov=src --cov-report=xml
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          retention-days: 7
+
+  build-and-deploy:
+    name: Build, Push, and Deploy
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set image tag
+        id: tag
+        run: echo "TAG=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+
+      - name: Compose image URIs
+        id: uris
+        run: |
+          echo "VERSIONED=${{ env.REGISTRY }}/${{ secrets.IBM_ICR_NAMESPACE }}/ibmcloud-vercel:${{ steps.tag.outputs.TAG }}" >> "$GITHUB_OUTPUT"
+          echo "LATEST=${{ env.REGISTRY }}/${{ secrets.IBM_ICR_NAMESPACE }}/ibmcloud-vercel:latest" >> "$GITHUB_OUTPUT"
+
+      - name: Install IBM Cloud CLI
+        run: |
+          curl -fsSL https://clis.cloud.ibm.com/install/linux | sh
+          ibmcloud --version
+
+      - name: Install IBM Cloud CLI plugins
+        run: |
+          ibmcloud plugin install container-registry -f
+          ibmcloud plugin install code-engine -f
+
+      - name: Log in to IBM Cloud
+        env:
+          IBMCLOUD_COLOR: false
+        run: |
+          ibmcloud login \
+            --apikey "${{ secrets.IBM_CLOUD_API_KEY }}" \
+            -r "${{ env.CE_REGION }}" \
+            -g Default
+
+      - name: Log in to IBM Container Registry
+        run: ibmcloud cr login --client docker
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            --tag "${{ steps.uris.outputs.VERSIONED }}" \
+            --tag "${{ steps.uris.outputs.LATEST }}" \
+            --label "org.opencontainers.image.revision=${{ github.sha }}" \
+            --label "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}" \
+            --label "org.opencontainers.image.version=${{ steps.tag.outputs.TAG }}" \
+            .
+
+      - name: Push versioned tag
+        run: docker push "${{ steps.uris.outputs.VERSIONED }}"
+
+      - name: Push latest tag
+        run: docker push "${{ steps.uris.outputs.LATEST }}"
+
+      - name: Target Code Engine project
+        run: ibmcloud ce project select --name "${{ secrets.IBM_CE_PROJECT_NAME }}"
+
+      - name: Deploy to Code Engine
+        run: |
+          ibmcloud ce application update \
+            --name "${{ secrets.IBM_CE_APP_NAME }}" \
+            --image "${{ steps.uris.outputs.VERSIONED }}" \
+            --registry-secret icr-secret \
+            --wait
