@@ -40,6 +40,7 @@ jobs:
     name: Build, Push, and Deploy
     runs-on: ubuntu-latest
     needs: test
+    environment: deploy
     steps:
       - uses: actions/checkout@v4
 
