@@ -1,75 +1,57 @@
 # IBMCloudVercel Configuration
-# Copy this file to 'ibmcloudvercel.yml' and customize as needed
+# Copy this file to 'ibmcloudvercel.yml' in your repo root and customize as needed.
 #
 # Environment Variable Support:
 #   Use ${VAR_NAME} syntax to reference environment variables
 #   Use ${VAR_NAME:-default} to provide a default value
-#   For Vercel: Set these in Project Settings > Environment Variables
+#   Set these in Vercel: Project Settings > Environment Variables
 
 # IBM Cloud Configuration (REQUIRED)
 ibm_cloud:
-  # IBM Cloud region where Code Engine project is located
-  # Examples: us-south, us-east, eu-gb, eu-de, jp-tok, au-syd
+  # IBM Cloud region where your Code Engine project lives
+  # Options: us-south, us-east, eu-gb, eu-de, jp-tok, au-syd
   region: "${IBM_CLOUD_REGION:-us-south}"
 
-  # Code Engine project ID (found in IBM Cloud Console)
+  # Code Engine project ID (IBM Cloud Console > Code Engine > your project > Overview)
   # Format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
   project_id: "${IBM_CODE_ENGINE_PROJECT_ID}"
 
-  # Cloud Object Storage bucket name for staging source code
-  cos_bucket: "${IBM_COS_BUCKET_NAME}"
+  # ===== AUTHENTICATION (choose ONE) =====
 
-  # Optional: Custom COS endpoint (auto-detected from region if not provided)
-  # cos_endpoint: "${IBM_COS_ENDPOINT}"
-
-  # Optional: Container Registry secret name (if using private registry)
-  # registry_secret: "${IBM_REGISTRY_SECRET}"
-
-  # ===== AUTHENTICATION (Choose ONE method) =====
-
-  # RECOMMENDED: OIDC Authentication (Most Secure - No static secrets!)
-  # Set this to use Vercel's OIDC token exchange via IBM Trusted Profile
-  # This requires setting up an IBM Cloud Trusted Profile that trusts Vercel's OIDC issuer
+  # RECOMMENDED: OIDC via IBM Trusted Profile (no static secrets)
+  # Requires an IBM Trusted Profile that trusts Vercel's OIDC issuer (https://oidc.vercel.com)
   # Format: Profile-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
   # trusted_profile_id: "${IBM_TRUSTED_PROFILE_ID}"
 
-  # FALLBACK: API Key Authentication
-  # If trusted_profile_id is not set, falls back to using IBM_CLOUD_API_KEY env var
-  # Set IBM_CLOUD_API_KEY in Vercel Environment Variables
-  # Note: OIDC is preferred as it uses short-lived tokens instead of static secrets
+  # FALLBACK: API Key
+  # If trusted_profile_id is not set, IBM_CLOUD_API_KEY env var is used automatically.
+  # Set IBM_CLOUD_API_KEY in Vercel Environment Variables — no field needed here.
 
-# Application Scaling Configuration (OPTIONAL)
-# These are sensible defaults - adjust based on your application needs
+  # Container Registry secret (required for pushing built images)
+  # Create in Code Engine: ibmcloud ce secret create --format registry --name my-registry-secret ...
+  registry_secret: "${IBM_REGISTRY_SECRET}"
+
+  # Git source secret (only needed for private GitHub repos)
+  # Create in Code Engine: ibmcloud ce secret create --format ssh --name my-git-secret ...
+  # git_source_secret: "${IBM_GIT_SOURCE_SECRET}"
+
+# Scaling Configuration (OPTIONAL — these are sensible defaults)
 scaling:
-  # Minimum number of instances (0 = scale to zero when idle)
+  # 0 = scale to zero when idle
   min_scale: 0
-
-  # Maximum number of instances
   max_scale: 10
 
-  # CPU allocation per instance (0.25, 0.5, 1.0, 2.0, 4.0, 8.0)
+  # CPU options: 0.25, 0.5, 1.0, 2.0, 4.0, 8.0
   cpu: "0.25"
 
-  # Memory allocation per instance (0.5G, 1G, 2G, 4G, 8G, 16G, 32G)
+  # Memory options: 0.5G, 1G, 2G, 4G, 8G, 16G, 32G
   memory: "0.5G"
 
-  # Application port (must match your app's listening port)
+  # Must match the port your app listens on inside the container
   port: 8080
 
-  # Maximum concurrent requests per instance
+  # Max concurrent requests per instance
   concurrency: 100
 
-# Deployment Options (OPTIONAL)
-# Directory containing source code to deploy (relative to repo root)
+# Source directory to deploy (relative to repo root, default: ".")
 source_dir: "."
-
-# Whether to delete uploaded artifacts from COS after deployment
-cleanup_artifacts: true
-
-# Environment Variables (OPTIONAL)
-# Note: Set sensitive values like IBM_CLOUD_API_KEY in Vercel Environment Variables
-# env:
-#   - name: "NODE_ENV"
-#     value: "production"
-#   - name: "DATABASE_URL"
-#     value: "postgresql://..."

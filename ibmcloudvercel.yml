@@ -61,10 +61,3 @@ scaling:
 # Leave as "." to use the repo root
 source_dir: "."
 
-# Environment Variables (OPTIONAL)
-# Note: Set sensitive values like IBM_CLOUD_API_KEY in Vercel Environment Variables
-# env:
-#   - name: "NODE_ENV"
-#     value: "production"
-#   - name: "DATABASE_URL"
-#     value: "postgresql://..."
