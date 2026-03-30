@@ -1,0 +1,57 @@
+# IBMCloudVercel Configuration
+# Copy this file to 'ibmcloudvercel.yml' in your repo root and customize as needed.
+#
+# Environment Variable Support:
+#   Use ${VAR_NAME} syntax to reference environment variables
+#   Use ${VAR_NAME:-default} to provide a default value
+#   Set these in Vercel: Project Settings > Environment Variables
+
+# IBM Cloud Configuration (REQUIRED)
+ibm_cloud:
+  # IBM Cloud region where your Code Engine project lives
+  # Options: us-south, us-east, eu-gb, eu-de, jp-tok, au-syd
+  region: "${IBM_CLOUD_REGION:-us-south}"
+
+  # Code Engine project ID (IBM Cloud Console > Code Engine > your project > Overview)
+  # Format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+  project_id: "${IBM_CODE_ENGINE_PROJECT_ID}"
+
+  # ===== AUTHENTICATION (choose ONE) =====
+
+  # RECOMMENDED: OIDC via IBM Trusted Profile (no static secrets)
+  # Requires an IBM Trusted Profile that trusts Vercel's OIDC issuer (https://oidc.vercel.com)
+  # Format: Profile-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+  # trusted_profile_id: "${IBM_TRUSTED_PROFILE_ID}"
+
+  # FALLBACK: API Key
+  # If trusted_profile_id is not set, IBM_CLOUD_API_KEY env var is used automatically.
+  # Set IBM_CLOUD_API_KEY in Vercel Environment Variables — no field needed here.
+
+  # Container Registry secret (required for pushing built images)
+  # Create in Code Engine: ibmcloud ce secret create --format registry --name my-registry-secret ...
+  registry_secret: "${IBM_REGISTRY_SECRET}"
+
+  # Git source secret (only needed for private GitHub repos)
+  # Create in Code Engine: ibmcloud ce secret create --format ssh --name my-git-secret ...
+  # git_source_secret: "${IBM_GIT_SOURCE_SECRET}"
+
+# Scaling Configuration (OPTIONAL — these are sensible defaults)
+scaling:
+  # 0 = scale to zero when idle
+  min_scale: 0
+  max_scale: 10
+
+  # CPU options: 0.25, 0.5, 1.0, 2.0, 4.0, 8.0
+  cpu: "0.25"
+
+  # Memory options: 0.5G, 1G, 2G, 4G, 8G, 16G, 32G
+  memory: "0.5G"
+
+  # Must match the port your app listens on inside the container
+  port: 8080
+
+  # Max concurrent requests per instance
+  concurrency: 100
+
+# Source directory to deploy (relative to repo root, default: ".")
+source_dir: "."
