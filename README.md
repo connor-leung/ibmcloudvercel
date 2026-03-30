@@ -10,7 +10,6 @@ IBMCloudVercel integrates into your Vercel build pipeline and automatically depl
 
 - **Automated Deployment**: Deploys directly from Vercel CI to IBM Cloud Code Engine
 - **Preview Deployments**: Creates separate Code Engine apps for each git branch/PR
-- **Source Code Staging**: Uses IBM Cloud Object Storage for secure source transfer
 - **OIDC Authentication**: Secure keyless authentication via Vercel OIDC tokens (no static secrets!)
 - **Vercel Integration**: Reports deployment status via Vercel Checks API
 - **Configurable Scaling**: Define min/max instances, CPU, memory via YAML config
@@ -23,9 +22,10 @@ ibmcloudvercel/
 │   └── ibm_cloud_vercel/
 │       ├── core/
 │       │   └── config.py          # Configuration parser
-│       └── sdk/
-│           ├── auth.py            # IBM Cloud authentication
-│           └── cos.py             # COS upload wrapper
+│       ├── sdk/
+│       │   └── auth.py            # IBM Cloud authentication
+│       └── integration/
+│           └── service.py         # Integration backend service
 ├── deploy_ibm.py                  # Main entry point
 ├── ibmcloudvercel.example.yml     # Configuration template
 ├── pyproject.toml                 # Python project metadata
@@ -52,7 +52,6 @@ Edit [ibmcloudvercel.yml](ibmcloudvercel.yml) with your:
 
 - IBM Cloud region
 - Code Engine project ID
-- Cloud Object Storage bucket name
 - (Recommended) IBM Trusted Profile ID for OIDC authentication
 
 ### 3. Authentication Setup
@@ -67,15 +66,12 @@ ibm_cloud:
   trusted_profile_id: "Profile-xxxx-xxxx-xxxx"
 ```
 
-See [OIDC_SETUP.md](OIDC_SETUP.md) for detailed setup instructions.
-
 **Option B: API Key Authentication (Fallback)**
 
 Set environment variables in Vercel project settings:
 
 ```bash
 export IBM_CLOUD_API_KEY="your-ibm-cloud-api-key"
-export IBM_COS_SERVICE_INSTANCE_ID="your-cos-service-crn"
 ```
 
 ### 4. Run Deployment
@@ -89,6 +85,14 @@ For local validation without mutating IBM Cloud resources:
 ```bash
 IBM_CLOUD_VERCEL_DRY_RUN=true python deploy_ibm.py
 ```
+
+## Examples
+
+Ready-to-copy integration files are available in [`starters/nextjs/`](starters/nextjs/):
+
+- `Dockerfile` — multi-stage Next.js build for Code Engine (port 8080, non-root user)
+- `next.config.ts` — required `output: 'standalone'` setting
+- `ibmcloudvercel.yml` — configuration template
 
 ## Integration Backend Mode
 
@@ -147,8 +151,6 @@ Webhook request notes:
 
 1. Provision IBM Cloud resources:
    - Code Engine project (`ibm_cloud.project_id`)
-   - Cloud Object Storage bucket (`ibm_cloud.cos_bucket`)
-   - COS service instance CRN (`IBM_COS_SERVICE_INSTANCE_ID`)
 2. Configure authentication:
    - Preferred: set `ibm_cloud.trusted_profile_id` and run in Vercel with `VERCEL_OIDC_TOKEN`.
    - Fallback: set `IBM_CLOUD_API_KEY`.
@@ -156,7 +158,7 @@ Webhook request notes:
    - Set `IBM_CODE_ENGINE_IMAGE_REFERENCE` (or `IBM_CODE_ENGINE_IMAGE`).
 4. Deploy this integration backend publicly (HTTPS required).
 5. Set integration service environment variables:
-   - Required: `VERCEL_WEBHOOK_SECRET`, `IBM_COS_SERVICE_INSTANCE_ID`, `IBM_CODE_ENGINE_IMAGE_REFERENCE`
+   - Required: `VERCEL_WEBHOOK_SECRET`, `IBM_CODE_ENGINE_IMAGE_REFERENCE`
    - Optional: `INTEGRATION_DEPLOY_COMMAND`, `INTEGRATION_UNINSTALL_CLEANUP_COMMAND`
 6. Use the manifest template:
    - Copy `integration-manifest.example.json` to your integration provider config.
@@ -186,7 +188,6 @@ Validate exact scope keys against current Vercel manifest schema before publishi
 
 Core deployment:
 
-- `IBM_COS_SERVICE_INSTANCE_ID` (required; COS CRN)
 - `IBM_CODE_ENGINE_IMAGE_REFERENCE` (required unless `IBM_CODE_ENGINE_IMAGE` is set)
 - `IBM_CODE_ENGINE_IMAGE` (optional fallback image variable)
 - `IBM_CLOUD_API_KEY` (required when OIDC is unavailable)
@@ -225,7 +226,7 @@ Failure handling:
 
 1. `401` from webhook endpoint: check `VERCEL_WEBHOOK_SECRET` and signature generation.
 2. Checks not updating: confirm installation token exists in store and `VERCEL_TEAM_ID` scope is set by payload.
-3. COS/Code Engine failures: inspect deploy logs for explicit IAM/COS/Code Engine error details.
+3. Code Engine failures: inspect deploy logs for explicit IAM/Code Engine error details.
 
 Dry-run local validation:
 
@@ -243,7 +244,6 @@ Current behavior on `POST /integration/uninstall`:
 Recommended cleanup command responsibilities:
 
 - Remove/disable integration-specific Code Engine app(s) if applicable.
-- Remove deployment artifacts in COS prefixes used by the integration.
 - Revoke or rotate any integration-managed credentials/tokens.
 
 Cleanup command environment variables:
@@ -261,13 +261,11 @@ See [ibmcloudvercel.example.yml](ibmcloudvercel.example.yml) for a complete conf
 
 - `ibm_cloud.region`: IBM Cloud region (e.g., `us-south`)
 - `ibm_cloud.project_id`: Code Engine project ID
-- `ibm_cloud.cos_bucket`: Cloud Object Storage bucket name
 
 ### Optional Settings
 
 - `scaling.*`: Configure CPU, memory, min/max instances
 - `source_dir`: Source directory to deploy (default: `.`)
-- `cleanup_artifacts`: Delete COS artifacts after deployment (default: `true`)
 
 ## Author
 
