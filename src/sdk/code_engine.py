@@ -397,7 +397,6 @@ def create_build_run(
     """
     kwargs: dict[str, Any] = {
         "project_id": project_id,
-        "build_name": build_payload["name"],
         "service_account": "default",
     }
 
