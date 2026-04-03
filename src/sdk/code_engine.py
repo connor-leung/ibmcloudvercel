@@ -395,8 +395,11 @@ def create_build_run(
     Example:
         build_run_name = create_build_run(client, "proj-id", build_payload)
     """
+    import time as _time
+    run_name = f"{build_payload['name']}-{int(_time.time())}"[:63]
     kwargs: dict[str, Any] = {
         "project_id": project_id,
+        "name": run_name,
         "service_account": "default",
     }
 
