@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import os
+import re
 import shlex
 import subprocess
 import threading
@@ -235,6 +236,15 @@ class DeploymentJobWorker:
             env["VERCEL_GIT_REPO_SLUG"] = event.git_repo_slug
         if event.project_name:
             env["VERCEL_PROJECT_NAME"] = event.project_name
+
+        if not env.get("IBM_CODE_ENGINE_IMAGE_REFERENCE"):
+            registry = os.getenv("IBM_ICR_REGISTRY", "us.icr.io")
+            namespace = os.getenv("IBM_ICR_NAMESPACE", "ibmcloudvercel")
+            project = event.project_name or event.git_repo_slug or "app"
+            branch = event.git_commit_ref or "latest"
+            tag = re.sub(r"[^a-z0-9-]", "-", branch.lower())[:128]
+            name = re.sub(r"[^a-z0-9-]", "-", project.lower())[:63]
+            env["IBM_CODE_ENGINE_IMAGE_REFERENCE"] = f"{registry}/{namespace}/{name}:{tag}"
 
         print(
             "[integration] processing deployment.created asynchronously "
