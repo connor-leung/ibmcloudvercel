@@ -22,6 +22,51 @@ from .webhook import (
 )
 
 
+_CONFIG_FORM_HTML = """\
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Connect IBM Cloud</title>
+  <style>
+    body {{ font-family: sans-serif; max-width: 480px; margin: 60px auto; padding: 0 16px; }}
+    h1 {{ font-size: 1.4rem; margin-bottom: 8px; }}
+    p {{ color: #555; margin-bottom: 24px; }}
+    label {{ display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 4px; }}
+    input {{ width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;
+             font-size: 0.95rem; box-sizing: border-box; margin-bottom: 16px; }}
+    button {{ background: #0066cc; color: #fff; border: none; padding: 10px 20px;
+              border-radius: 4px; font-size: 1rem; cursor: pointer; width: 100%; }}
+    button:hover {{ background: #0055aa; }}
+    .hint {{ font-size: 0.78rem; color: #888; margin-top: -12px; margin-bottom: 16px; }}
+  </style>
+</head>
+<body>
+  <h1>Connect your IBM Cloud account</h1>
+  <p>Your IBM Cloud credentials are used to build and deploy your app on Code Engine.
+     They are stored securely and never shared.</p>
+  <form method="POST" action="/integration/configure">
+    <input type="hidden" name="installation_id" value="{installation_id}">
+    <input type="hidden" name="next_url" value="{next_url}">
+    <label>IBM Cloud API Key</label>
+    <input type="password" name="ibm_cloud_api_key" required placeholder="xxxx-xxxx-xxxx">
+    <label>Code Engine Project ID</label>
+    <input type="text" name="ibm_code_engine_project_id" required placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+    <p class="hint">Found in IBM Cloud Console → Code Engine → your project → Overview</p>
+    <label>Container Registry Secret Name</label>
+    <input type="text" name="ibm_registry_secret" required placeholder="icr-secret">
+    <p class="hint">A Code Engine secret with your ICR push credentials</p>
+    <label>Region <span style="font-weight:normal">(optional, default: us-south)</span></label>
+    <input type="text" name="ibm_cloud_region" placeholder="us-south">
+    <label>ICR Namespace <span style="font-weight:normal">(optional, default: ibmcloudvercel)</span></label>
+    <input type="text" name="ibm_icr_namespace" placeholder="ibmcloudvercel">
+    <button type="submit">Save and continue</button>
+  </form>
+</body>
+</html>
+"""
+
+
 def _safe_redirect(handler: BaseHTTPRequestHandler, location: str) -> None:
     handler.send_response(302)
     handler.send_header("Location", location)
@@ -131,6 +176,10 @@ def _make_handler(
 
             if path == "/integration/webhook":
                 self._handle_webhook()
+                return
+
+            if path == "/integration/configure":
+                self._handle_configure()
                 return
 
             try:
@@ -257,7 +306,48 @@ def _make_handler(
                 team_id=str(team_id) if team_id else None,
             )
 
-            _safe_redirect(self, next_url)
+            html = _CONFIG_FORM_HTML.format(
+                installation_id=installation_id,
+                next_url=next_url,
+            )
+            body = html.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def _handle_configure(self) -> None:
+            raw = _read_raw_body(self)
+            params = parse_qs(raw.decode("utf-8"), keep_blank_values=False)
+
+            def first(key: str) -> str | None:
+                vals = params.get(key)
+                return vals[0].strip() if vals and vals[0].strip() else None
+
+            installation_id = first("installation_id")
+            next_url = first("next_url")
+            ibm_cloud_api_key = first("ibm_cloud_api_key")
+            ibm_code_engine_project_id = first("ibm_code_engine_project_id")
+            ibm_registry_secret = first("ibm_registry_secret")
+            ibm_cloud_region = first("ibm_cloud_region")
+            ibm_icr_namespace = first("ibm_icr_namespace")
+
+            if not installation_id or not ibm_cloud_api_key or not ibm_code_engine_project_id or not ibm_registry_secret:
+                _safe_json(self, {"error": "Missing required fields"}, 400)
+                return
+
+            store.upsert_installation(
+                installation_id=installation_id,
+                access_token=store.get_installation(installation_id).get("access_token", "") if store.get_installation(installation_id) else "",
+                ibm_cloud_api_key=ibm_cloud_api_key,
+                ibm_code_engine_project_id=ibm_code_engine_project_id,
+                ibm_registry_secret=ibm_registry_secret,
+                ibm_cloud_region=ibm_cloud_region or None,
+                ibm_icr_namespace=ibm_icr_namespace or None,
+            )
+
+            _safe_redirect(self, next_url or "/")
 
         def _handle_webhook(self) -> None:
             raw = _read_raw_body(self)

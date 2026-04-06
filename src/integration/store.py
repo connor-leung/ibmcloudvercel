@@ -56,6 +56,11 @@ class InstallationStore:
         team_slug: Optional[str] = None,
         project_id: Optional[str] = None,
         project_name: Optional[str] = None,
+        ibm_cloud_api_key: Optional[str] = None,
+        ibm_code_engine_project_id: Optional[str] = None,
+        ibm_cloud_region: Optional[str] = None,
+        ibm_registry_secret: Optional[str] = None,
+        ibm_icr_namespace: Optional[str] = None,
     ) -> dict[str, Any]:
         with self._lock:
             data = self._load()
@@ -70,6 +75,11 @@ class InstallationStore:
                 "team_slug": team_slug,
                 "project_id": project_id,
                 "project_name": project_name,
+                "ibm_cloud_api_key": ibm_cloud_api_key or previous.get("ibm_cloud_api_key"),
+                "ibm_code_engine_project_id": ibm_code_engine_project_id or previous.get("ibm_code_engine_project_id"),
+                "ibm_cloud_region": ibm_cloud_region or previous.get("ibm_cloud_region"),
+                "ibm_registry_secret": ibm_registry_secret or previous.get("ibm_registry_secret"),
+                "ibm_icr_namespace": ibm_icr_namespace or previous.get("ibm_icr_namespace"),
                 "installed_at": previous.get("installed_at", now),
                 "updated_at": now,
             }

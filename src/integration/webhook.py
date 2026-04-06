@@ -226,6 +226,17 @@ class DeploymentJobWorker:
                 env.setdefault("VERCEL_INSTALLATION_TOKEN", installation["access_token"])
                 env.setdefault("VERCEL_INTEGRATION_ACCESS_TOKEN", installation["access_token"])
                 env.setdefault("VERCEL_CHECKS_TOKEN", installation["access_token"])
+            if installation:
+                if installation.get("ibm_cloud_api_key"):
+                    env["IBM_CLOUD_API_KEY"] = installation["ibm_cloud_api_key"]
+                if installation.get("ibm_code_engine_project_id"):
+                    env["IBM_CODE_ENGINE_PROJECT_ID"] = installation["ibm_code_engine_project_id"]
+                if installation.get("ibm_registry_secret"):
+                    env["IBM_REGISTRY_SECRET"] = installation["ibm_registry_secret"]
+                if installation.get("ibm_cloud_region"):
+                    env["IBM_CLOUD_REGION"] = installation["ibm_cloud_region"]
+                if installation.get("ibm_icr_namespace"):
+                    env["IBM_ICR_NAMESPACE"] = installation["ibm_icr_namespace"]
         if event.git_commit_sha:
             env["VERCEL_GIT_COMMIT_SHA"] = event.git_commit_sha
         if event.git_commit_ref:
