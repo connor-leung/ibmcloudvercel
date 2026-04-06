@@ -1,8 +1,10 @@
 # IBM Cloud SDK Dependencies
 ibm-code-engine-sdk>=3.6.0
 ibm-cloud-sdk-core>=3.16.0
+ibm-cos-sdk>=2.13.0
 
 # Configuration and Utilities
 pyyaml>=6.0
 requests>=2.31.0
 python-dotenv>=1.0.0
+cryptography>=41.0.0
