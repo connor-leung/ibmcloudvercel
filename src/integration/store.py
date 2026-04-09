@@ -185,7 +185,7 @@ class InstallationStore:
 
 def _build_cos_client() -> Any:
     """Return an ibm_boto3 COS client if all required env vars are set."""
-    bucket = os.getenv("IBM_COS_BUCKET", "").strip()
+    bucket = (os.getenv("IBM_COS_BUCKET_NAME") or os.getenv("IBM_COS_BUCKET") or "").strip()
     if not bucket:
         return None
 
@@ -194,7 +194,7 @@ def _build_cos_client() -> Any:
         or os.getenv("IBM_CLOUD_API_KEY")
         or ""
     ).strip()
-    instance_crn = os.getenv("IBM_COS_INSTANCE_CRN", "").strip()
+    instance_crn = (os.getenv("IBM_COS_INSTANCE_CRN") or os.getenv("IBM_COS_SERVICE_INSTANCE_ID") or "").strip()
     endpoint = os.getenv("IBM_COS_ENDPOINT", "").strip()
 
     if not api_key or not instance_crn or not endpoint:
@@ -223,7 +223,7 @@ def _build_cos_client() -> Any:
 
 
 def _cos_bucket() -> str:
-    return os.getenv("IBM_COS_BUCKET", "ibmcloudvercel-store")
+    return (os.getenv("IBM_COS_BUCKET_NAME") or os.getenv("IBM_COS_BUCKET") or "ibmcloudvercel-store")
 
 
 _COS_KEY = "installations.json"
