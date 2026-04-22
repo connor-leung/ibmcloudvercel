@@ -130,6 +130,7 @@ class InstallationStore:
         ibm_cloud_region: Optional[str] = None,
         ibm_registry_secret: Optional[str] = None,
         ibm_icr_namespace: Optional[str] = None,
+        ibm_git_source_secret: Optional[str] = None,
     ) -> dict[str, Any]:
         with self._lock:
             data = self._load()
@@ -152,6 +153,7 @@ class InstallationStore:
                 "ibm_cloud_region": ibm_cloud_region or previous.get("ibm_cloud_region"),
                 "ibm_registry_secret": ibm_registry_secret or previous.get("ibm_registry_secret"),
                 "ibm_icr_namespace": ibm_icr_namespace or previous.get("ibm_icr_namespace"),
+                "ibm_git_source_secret": ibm_git_source_secret or previous.get("ibm_git_source_secret"),
                 "installed_at": previous.get("installed_at", now),
                 "updated_at": now,
             }

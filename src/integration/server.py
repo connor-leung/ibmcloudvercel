@@ -60,6 +60,9 @@ _CONFIG_FORM_HTML = """\
     <input type="text" name="ibm_cloud_region" placeholder="us-south">
     <label>ICR Namespace <span style="font-weight:normal">(optional, default: ibmcloudvercel)</span></label>
     <input type="text" name="ibm_icr_namespace" placeholder="ibmcloudvercel">
+    <label>Git Source Secret <span style="font-weight:normal">(optional, for private repos)</span></label>
+    <input type="text" name="ibm_git_source_secret" placeholder="github-secret">
+    <p class="hint">A Code Engine secret with your GitHub credentials for cloning private repositories</p>
     <button type="submit">Save and continue</button>
   </form>
 </body>
@@ -332,6 +335,7 @@ def _make_handler(
             ibm_registry_secret = first("ibm_registry_secret")
             ibm_cloud_region = first("ibm_cloud_region")
             ibm_icr_namespace = first("ibm_icr_namespace")
+            ibm_git_source_secret = first("ibm_git_source_secret")
 
             if not installation_id or not ibm_cloud_api_key or not ibm_code_engine_project_id or not ibm_registry_secret:
                 _safe_json(self, {"error": "Missing required fields"}, 400)
@@ -345,6 +349,7 @@ def _make_handler(
                 ibm_registry_secret=ibm_registry_secret,
                 ibm_cloud_region=ibm_cloud_region or None,
                 ibm_icr_namespace=ibm_icr_namespace or None,
+                ibm_git_source_secret=ibm_git_source_secret or None,
             )
 
             _safe_redirect(self, next_url or "/")

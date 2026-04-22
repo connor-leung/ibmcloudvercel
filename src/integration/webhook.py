@@ -237,6 +237,8 @@ class DeploymentJobWorker:
                     env["IBM_CLOUD_REGION"] = installation["ibm_cloud_region"]
                 if installation.get("ibm_icr_namespace"):
                     env["IBM_ICR_NAMESPACE"] = installation["ibm_icr_namespace"]
+                if installation.get("ibm_git_source_secret"):
+                    env["IBM_GIT_SOURCE_SECRET"] = installation["ibm_git_source_secret"]
         if event.git_commit_sha:
             env["VERCEL_GIT_COMMIT_SHA"] = event.git_commit_sha
         if event.git_commit_ref:
